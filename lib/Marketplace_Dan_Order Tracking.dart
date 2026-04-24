@@ -14,7 +14,7 @@ const kGray = Color(0xFF666666);
 const kBorder = Color(0xFFE0D8CC);
 const kBg = Color(0xFFFAFAF7);
 
-// MODELS 
+// MODELS
 class Product {
   final String id;
   final String name;
@@ -70,7 +70,7 @@ enum OrderStatus {
   cancelled
 }
 
-// MARKETPLACE PAGE 
+// MARKETPLACE PAGE
 class MarketplacePage extends StatefulWidget {
   const MarketplacePage({Key? key}) : super(key: key);
 
@@ -142,7 +142,8 @@ class _MarketplacePageState extends State<MarketplacePage> {
     Product(
       id: 'UMKM-006',
       name: 'Sate Jamur & Abon Lele',
-      description: 'Sate jamur lezat dipadu abon lele gurih untuk cemilan sehat.',
+      description:
+          'Sate jamur lezat dipadu abon lele gurih untuk cemilan sehat.',
       price: 29000,
       imageUrl: 'assets/sate_jamur_abon_lele.jpg',
       category: 'Makanan',
@@ -163,7 +164,13 @@ class _MarketplacePageState extends State<MarketplacePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Marketplace'),
+        title: const Text(
+          'Marketplace',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         elevation: 0,
         backgroundColor: kGreen,
         actions: [
@@ -173,7 +180,8 @@ class _MarketplacePageState extends State<MarketplacePage> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const chatbot.ChatbotPage()),
+                MaterialPageRoute(
+                    builder: (context) => const chatbot.ChatbotPage()),
               );
             },
           ),
@@ -188,7 +196,8 @@ class _MarketplacePageState extends State<MarketplacePage> {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const chatbot.ChatbotPage()),
+                  MaterialPageRoute(
+                      builder: (context) => const chatbot.ChatbotPage()),
                 );
               },
               child: Container(
@@ -208,7 +217,8 @@ class _MarketplacePageState extends State<MarketplacePage> {
                         color: kGreenPale,
                         borderRadius: BorderRadius.circular(14),
                       ),
-                      child: const Icon(Icons.chat_bubble_outline, color: kGreen),
+                      child:
+                          const Icon(Icons.chat_bubble_outline, color: kGreen),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -217,7 +227,8 @@ class _MarketplacePageState extends State<MarketplacePage> {
                         children: const [
                           Text(
                             'Butuh bantuan? Chat dengan asisten kami',
-                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                            style: TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 14),
                           ),
                           SizedBox(height: 4),
                           Text(
@@ -357,7 +368,8 @@ class ProductCard extends StatelessWidget {
                         color: kGreen,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.share, color: Colors.white, size: 18),
+                      child: const Icon(Icons.share,
+                          color: Colors.white, size: 18),
                     ),
                   ),
                 ),
@@ -365,7 +377,7 @@ class ProductCard extends StatelessWidget {
             ),
 
             // Product info
-              Padding(
+            Padding(
               padding: const EdgeInsets.all(8.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -424,7 +436,8 @@ class ProductCard extends StatelessWidget {
                   onPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('${product.name} ditambahkan ke keranjang'),
+                        content:
+                            Text('${product.name} ditambahkan ke keranjang'),
                         duration: const Duration(seconds: 1),
                       ),
                     );
@@ -578,7 +591,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                               iconSize: 18,
                             ),
                             Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 12),
                               child: Text(
                                 quantity.toString(),
                                 style: const TextStyle(
@@ -706,7 +720,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   void _shareToWhatsApp() {
     final url =
-        'https://api.whatsapp.com/send?text=${Uri.encodeComponent('Halo! Saya ingin berbagi produk ini dengan Anda 😊\n\n${widget.product.name}\n${widget.product.description}\n\n💰 Harga: Rp ${NumberFormat('#,###', 'id_ID').format(widget.product.price)}\n\nLihat detail: https://marketplace.app/product/${widget.product.id}') }';
+        'https://api.whatsapp.com/send?text=${Uri.encodeComponent('Halo! Saya ingin berbagi produk ini dengan Anda 😊\n\n${widget.product.name}\n${widget.product.description}\n\n💰 Harga: Rp ${NumberFormat('#,###', 'id_ID').format(widget.product.price)}\n\nLihat detail: https://marketplace.app/product/${widget.product.id}')}';
     _launchUrl(url);
   }
 
@@ -819,7 +833,13 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Lacak Pesanan'),
+        title: const Text(
+          'Lacak Pesanan',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         backgroundColor: kGreen,
       ),
       body: ListView.builder(
@@ -833,7 +853,7 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
   }
 }
 
-// ORDER CARD 
+// ORDER CARD
 class OrderCard extends StatelessWidget {
   final Order order;
 
@@ -890,7 +910,8 @@ class OrderCard extends StatelessWidget {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: _getStatusColor(order.status).withValues(alpha: 0.1),
+                      color:
+                          _getStatusColor(order.status).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -919,7 +940,8 @@ class OrderCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        DateFormat('dd MMM yyyy', 'id_ID').format(order.orderDate),
+                        DateFormat('dd MMM yyyy', 'id_ID')
+                            .format(order.orderDate),
                         style: TextStyle(
                           fontSize: 12,
                           color: kGray,
@@ -1045,7 +1067,8 @@ class OrderDetailPage extends StatelessWidget {
             // Order status card
             Card(
               elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -1066,7 +1089,8 @@ class OrderDetailPage extends StatelessWidget {
                           width: 50,
                           height: 50,
                           decoration: BoxDecoration(
-                            color: _getStatusColor(order.status).withValues(alpha: 0.1),
+                            color: _getStatusColor(order.status)
+                                .withValues(alpha: 0.1),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
@@ -1121,7 +1145,8 @@ class OrderDetailPage extends StatelessWidget {
             // Order details
             Card(
               elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -1152,7 +1177,8 @@ class OrderDetailPage extends StatelessWidget {
                     const Divider(),
                     _buildDetailRow(
                       'Tanggal Pesanan',
-                      DateFormat('dd MMMM yyyy HH:mm', 'id_ID').format(order.orderDate),
+                      DateFormat('dd MMMM yyyy HH:mm', 'id_ID')
+                          .format(order.orderDate),
                     ),
                   ],
                 ),
@@ -1229,10 +1255,22 @@ class OrderDetailPage extends StatelessWidget {
     final steps = [
       {'label': 'Pesanan Diterima', 'status': true},
       {'label': 'Pembayaran Dikonfirmasi', 'status': true},
-      {'label': 'Diproses', 'status': order.status.index >= OrderStatus.processing.index},
-      {'label': 'Dikirim', 'status': order.status.index >= OrderStatus.shipped.index},
-      {'label': 'Dalam Pengiriman', 'status': order.status.index >= OrderStatus.outForDelivery.index},
-      {'label': 'Tiba', 'status': order.status.index >= OrderStatus.delivered.index},
+      {
+        'label': 'Diproses',
+        'status': order.status.index >= OrderStatus.processing.index
+      },
+      {
+        'label': 'Dikirim',
+        'status': order.status.index >= OrderStatus.shipped.index
+      },
+      {
+        'label': 'Dalam Pengiriman',
+        'status': order.status.index >= OrderStatus.outForDelivery.index
+      },
+      {
+        'label': 'Tiba',
+        'status': order.status.index >= OrderStatus.delivered.index
+      },
     ];
 
     return Column(
@@ -1252,7 +1290,8 @@ class OrderDetailPage extends StatelessWidget {
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: isCompleted ? kGreen : kBorder.withValues(alpha: 0.3),
+                      color:
+                          isCompleted ? kGreen : kBorder.withValues(alpha: 0.3),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
@@ -1265,7 +1304,8 @@ class OrderDetailPage extends StatelessWidget {
                     Container(
                       width: 2,
                       height: 40,
-                      color: isCompleted ? kGreen : kBorder.withValues(alpha: 0.3),
+                      color:
+                          isCompleted ? kGreen : kBorder.withValues(alpha: 0.3),
                     ),
                 ],
               ),
