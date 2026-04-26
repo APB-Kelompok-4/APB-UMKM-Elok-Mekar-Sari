@@ -73,7 +73,13 @@ class _ProfilePageState extends State<ProfilePage> {
     return Scaffold(
       backgroundColor: kBg,
       appBar: AppBar(
-        title: const Text('Profil Saya'),
+        title: const Text(
+          'Profil Saya',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         backgroundColor: kGreen,
         elevation: 0,
         actions: [
@@ -82,8 +88,18 @@ class _ProfilePageState extends State<ProfilePage> {
               setState(() => _isEditing = !_isEditing);
               if (!_isEditing) _saveProfile();
             },
+            // Tambahkan baris style ini
+            style: TextButton.styleFrom(
+              foregroundColor:
+                  kGreenPale, // Menggunakan warna kGreenPale agar senada dengan tema
+            ),
             icon: Icon(_isEditing ? Icons.check : Icons.edit, size: 20),
-            label: Text(_isEditing ? 'Simpan' : 'Edit'),
+            label: Text(
+              _isEditing ? 'Simpan' : 'Edit',
+              style: const TextStyle(
+                  fontWeight: FontWeight
+                      .w600), // Tambahkan ketebalan agar lebih terbaca
+            ),
           ),
         ],
       ),
@@ -96,7 +112,12 @@ class _ProfilePageState extends State<ProfilePage> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(20),
-                boxShadow: [BoxShadow(color: const Color.fromRGBO(0, 0, 0, 0.08), blurRadius: 18, offset: const Offset(0, 8))],
+                boxShadow: [
+                  BoxShadow(
+                      color: const Color.fromRGBO(0, 0, 0, 0.08),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8))
+                ],
               ),
               padding: const EdgeInsets.all(20),
               child: Column(
@@ -113,12 +134,16 @@ class _ProfilePageState extends State<ProfilePage> {
                   const SizedBox(height: 12),
                   Text(
                     _name,
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: kDark),
+                    style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: kDark),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     _userId,
-                    style: const TextStyle(fontSize: 13, color: kGray, letterSpacing: 1),
+                    style: const TextStyle(
+                        fontSize: 13, color: kGray, letterSpacing: 1),
                   ),
                   const SizedBox(height: 12),
                   Container(
@@ -126,10 +151,14 @@ class _ProfilePageState extends State<ProfilePage> {
                       color: kGreenPale,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     child: Text(
                       'Bergabung sejak $_joinDate',
-                      style: const TextStyle(fontSize: 12, color: kGreen, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                          fontSize: 12,
+                          color: kGreen,
+                          fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
@@ -143,13 +172,21 @@ class _ProfilePageState extends State<ProfilePage> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
-                  boxShadow: [BoxShadow(color: const Color.fromRGBO(0, 0, 0, 0.05), blurRadius: 12)],
+                  boxShadow: [
+                    BoxShadow(
+                        color: const Color.fromRGBO(0, 0, 0, 0.05),
+                        blurRadius: 12)
+                  ],
                 ),
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Edit Profil', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: kDark)),
+                    const Text('Edit Profil',
+                        style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: kDark)),
                     const SizedBox(height: 16),
                     _buildTextField('Nama Lengkap', _nameController),
                     const SizedBox(height: 12),
@@ -185,19 +222,27 @@ class _ProfilePageState extends State<ProfilePage> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(20),
-                boxShadow: [BoxShadow(color: const Color.fromRGBO(0, 0, 0, 0.05), blurRadius: 12)],
+                boxShadow: [
+                  BoxShadow(
+                      color: const Color.fromRGBO(0, 0, 0, 0.05),
+                      blurRadius: 12)
+                ],
               ),
               child: Column(
                 children: [
                   _buildActionTile('Riwayat Pembelian', Icons.history, () {}),
                   Divider(color: kBorder, height: 1),
-                  _buildActionTile('Daftar Alamat', Icons.location_on_outlined, () {}),
+                  _buildActionTile(
+                      'Daftar Alamat', Icons.location_on_outlined, () {}),
                   Divider(color: kBorder, height: 1),
-                  _buildActionTile('Pengaturan Notifikasi', Icons.notifications_outlined, () {}),
+                  _buildActionTile('Pengaturan Notifikasi',
+                      Icons.notifications_outlined, () {}),
                   Divider(color: kBorder, height: 1),
-                  _buildActionTile('Bantuan & Dukungan', Icons.help_outline, () {}),
+                  _buildActionTile(
+                      'Bantuan & Dukungan', Icons.help_outline, () {}),
                   Divider(color: kBorder, height: 1),
-                  _buildActionTile('Keluar Akun', Icons.logout, () {}, isLogout: true),
+                  _buildActionTile('Keluar Akun', Icons.logout, () {},
+                      isLogout: true),
                 ],
               ),
             ),
@@ -212,15 +257,24 @@ class _ProfilePageState extends State<ProfilePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: kDark)),
+        Text(label,
+            style: const TextStyle(
+                fontSize: 13, fontWeight: FontWeight.w600, color: kDark)),
         const SizedBox(height: 6),
         TextField(
           controller: controller,
           decoration: InputDecoration(
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: kBorder)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: kBorder)),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: kGreen, width: 2)),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: kBorder)),
+            enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: kBorder)),
+            focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: kGreen, width: 2)),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             hintText: label,
             hintStyle: const TextStyle(color: kGray),
           ),
@@ -234,13 +288,20 @@ class _ProfilePageState extends State<ProfilePage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: const Color.fromRGBO(0, 0, 0, 0.05), blurRadius: 12)],
+        boxShadow: [
+          BoxShadow(color: const Color.fromRGBO(0, 0, 0, 0.05), blurRadius: 12)
+        ],
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: kDark, letterSpacing: 0.5)),
+          Text(title,
+              style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: kDark,
+                  letterSpacing: 0.5)),
           const SizedBox(height: 12),
           ...children,
         ],
@@ -254,14 +315,17 @@ class _ProfilePageState extends State<ProfilePage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 13, color: kGray, fontWeight: FontWeight.w500)),
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 13, color: kGray, fontWeight: FontWeight.w500)),
           const Spacer(),
           Expanded(
             flex: 2,
             child: Text(
               value,
               textAlign: TextAlign.right,
-              style: const TextStyle(fontSize: 13, color: kDark, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                  fontSize: 13, color: kDark, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -269,7 +333,8 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildActionTile(String title, IconData icon, VoidCallback onTap, {bool isLogout = false}) {
+  Widget _buildActionTile(String title, IconData icon, VoidCallback onTap,
+      {bool isLogout = false}) {
     return InkWell(
       onTap: onTap,
       child: Padding(
@@ -280,10 +345,14 @@ class _ProfilePageState extends State<ProfilePage> {
             const SizedBox(width: 12),
             Text(
               title,
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: isLogout ? Colors.red : kDark),
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: isLogout ? Colors.red : kDark),
             ),
             const Spacer(),
-            Icon(Icons.arrow_forward_ios, size: 16, color: isLogout ? Colors.red : kGray),
+            Icon(Icons.arrow_forward_ios,
+                size: 16, color: isLogout ? Colors.red : kGray),
           ],
         ),
       ),

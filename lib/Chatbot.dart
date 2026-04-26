@@ -126,7 +126,7 @@ class ChatbotEngine {
       'barang',
       'apa saja',
       'koleksi',
-      'stok'
+      'stok',
     ],
     'price': ['harga', 'berapa', 'biaya', 'mahal', 'murah'],
     'order_status': [
@@ -135,7 +135,7 @@ class ChatbotEngine {
       'sudah sampai',
       'dimana pesanan',
       'status',
-      'tracking'
+      'tracking',
     ],
     'payment': ['bayar', 'pembayaran', 'metode', 'cicilan'],
     'shipping': ['pengiriman', 'gratis ongkir', 'ongkos kirim', 'dikirim'],
@@ -224,7 +224,8 @@ class ChatbotEngine {
   }
 
   String _getProductListResponse() {
-    String response = '📦 Kami memiliki ${products.length} kategori produk unggulan:\n\n';
+    String response =
+        '📦 Kami memiliki ${products.length} kategori produk unggulan:\n\n';
 
     final categories = products.map((p) => p.category).toSet().toList();
     for (var i = 0; i < categories.length; i++) {
@@ -250,8 +251,7 @@ class ChatbotEngine {
   }
 
   String _getPriceResponse(String message) {
-    String response =
-        '💰 Berikut daftar harga produk kami:\n\n';
+    String response = '💰 Berikut daftar harga produk kami:\n\n';
 
     for (int i = 0; i < products.length; i++) {
       final product = products[i];
@@ -273,8 +273,11 @@ class ChatbotEngine {
     }
 
     final results = products
-        .where((p) => p.name.toLowerCase().contains(searchTerm.toLowerCase()) ||
-            p.category.toLowerCase().contains(searchTerm.toLowerCase()))
+        .where(
+          (p) =>
+              p.name.toLowerCase().contains(searchTerm.toLowerCase()) ||
+              p.category.toLowerCase().contains(searchTerm.toLowerCase()),
+        )
         .toList();
 
     if (results.isEmpty) {
@@ -305,10 +308,10 @@ class ChatbotEngine {
       final statusEmoji = order.status == 'Dikirim'
           ? '🚚'
           : order.status == 'Tiba'
-              ? '✅'
-              : order.status == 'Diproses'
-                  ? '⏳'
-                  : '📌';
+          ? '✅'
+          : order.status == 'Diproses'
+          ? '⏳'
+          : '📌';
 
       response +=
           '${i + 1}. ${order.productName}\n   $statusEmoji Status: ${order.status}\n   📅 Dipesan: ${DateFormat('dd MMM yyyy', 'id_ID').format(order.orderDate)}\n   ID: ${order.id}\n\n';
@@ -436,24 +439,28 @@ class _ChatbotPageState extends State<ChatbotPage> {
 
   void _addUserMessage(String message) {
     setState(() {
-      _messages.add(ChatMessage(
-        id: DateTime.now().toString(),
-        message: message,
-        isBot: false,
-        timestamp: DateTime.now(),
-      ));
+      _messages.add(
+        ChatMessage(
+          id: DateTime.now().toString(),
+          message: message,
+          isBot: false,
+          timestamp: DateTime.now(),
+        ),
+      );
     });
     _scrollToBottom();
   }
 
   void _addBotMessage(String message) {
     setState(() {
-      _messages.add(ChatMessage(
-        id: DateTime.now().toString(),
-        message: message,
-        isBot: true,
-        timestamp: DateTime.now(),
-      ));
+      _messages.add(
+        ChatMessage(
+          id: DateTime.now().toString(),
+          message: message,
+          isBot: true,
+          timestamp: DateTime.now(),
+        ),
+      );
     });
     _scrollToBottom();
   }
@@ -505,9 +512,7 @@ class _ChatbotPageState extends State<ChatbotPage> {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: Colors.white,
-              border: Border(
-                top: BorderSide(color: kBorder),
-              ),
+              border: Border(top: BorderSide(color: kBorder)),
             ),
             child: Row(
               children: [
@@ -548,8 +553,7 @@ class _ChatbotPageState extends State<ChatbotPage> {
                   ),
                   child: IconButton(
                     icon: const Icon(Icons.send, color: Colors.white),
-                    onPressed: () =>
-                        _sendMessage(_messageController.text),
+                    onPressed: () => _sendMessage(_messageController.text),
                   ),
                 ),
               ],
@@ -566,8 +570,9 @@ class _ChatbotPageState extends State<ChatbotPage> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
-        mainAxisAlignment:
-            isBot ? MainAxisAlignment.start : MainAxisAlignment.end,
+        mainAxisAlignment: isBot
+            ? MainAxisAlignment.start
+            : MainAxisAlignment.end,
         children: [
           if (isBot)
             Container(
@@ -584,9 +589,7 @@ class _ChatbotPageState extends State<ChatbotPage> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: isBot
-                    ? Colors.white
-                    : kGreen,
+                color: isBot ? Colors.white : kGreen,
                 borderRadius: BorderRadius.circular(16),
                 border: isBot ? Border.all(color: kBorder) : null,
               ),
@@ -647,10 +650,7 @@ class _ChatbotPageState extends State<ChatbotPage> {
       duration: const Duration(milliseconds: 600),
       width: 8,
       height: 8,
-      decoration: BoxDecoration(
-        color: kGreen,
-        shape: BoxShape.circle,
-      ),
+      decoration: BoxDecoration(color: kGreen, shape: BoxShape.circle),
     );
   }
 
@@ -685,10 +685,8 @@ class FloatingChatButton extends StatelessWidget {
 class QuickReplyButtons extends StatelessWidget {
   final Function(String) onReplyPressed;
 
-  const QuickReplyButtons({
-    Key? key,
-    required this.onReplyPressed,
-  }) : super(key: key);
+  const QuickReplyButtons({Key? key, required this.onReplyPressed})
+    : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -698,7 +696,7 @@ class QuickReplyButtons extends StatelessWidget {
       'Status pesanan',
       'Cara pembayaran',
       'Pengiriman',
-      'Bantuan'
+      'Bantuan',
     ];
 
     return SingleChildScrollView(
@@ -711,8 +709,10 @@ class QuickReplyButtons extends StatelessWidget {
             child: GestureDetector(
               onTap: () => onReplyPressed(reply),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),

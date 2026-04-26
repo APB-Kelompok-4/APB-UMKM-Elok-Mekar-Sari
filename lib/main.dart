@@ -3,6 +3,8 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'Marketplace_Dan_Order Tracking.dart';
 import 'Sistem Keluhan_Feedback.dart' as feedback;
 import 'profile.dart';
+import 'Login_Page.dart';
+import 'Register_Page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,7 +23,11 @@ class UMKMApp extends StatelessWidget {
         fontFamily: 'sans-serif',
         scaffoldBackgroundColor: const Color(0xFFFAFAF7),
       ),
-      home: SafeArea(child: MainPage()),
+      home: const LoginPage(),
+      routes: {
+        '/home': (context) => MainPage(),
+        '/register': (context) => const RegisterPage(),
+      },
     );
   }
 }
@@ -183,18 +189,6 @@ class HomePage extends StatelessWidget {
               ),
             ],
           ),
-          actions: [
-            Container(
-              margin: const EdgeInsets.only(right: 12),
-              width: 36, height: 36,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: kBorder, width: 1.5),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.shopping_bag_outlined, size: 18, color: kDark),
-            ),
-          ],
         ),
 
         SliverList(

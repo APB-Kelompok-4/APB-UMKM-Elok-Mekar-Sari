@@ -19,10 +19,6 @@ android {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
-    compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-    }
-
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.example.flutter_camera_app"
@@ -39,17 +35,20 @@ android {
         }
     }
 
-    splits {
-        abi {
-            enable false
-        }
-    }
-
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+        }
+        debug {
+            // Disable debug symbol stripping to avoid NDK permission issues
+            isDebuggable = true
+            isMinifyEnabled = false
+            isShrinkResources = false
+            ndk {
+                debugSymbolLevel = "none"
+            }
         }
     }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'Chatbot.dart' as chatbot;
 
 const kGreen = Color(0xFF2D5A27);
 const kGreenLight = Color(0xFF4A8C3F);
@@ -57,14 +58,9 @@ enum ComplaintStatus {
   rejected
 }
 
-enum ComplaintPriority {
-  low,
-  medium,
-  high,
-  urgent
-}
+enum ComplaintPriority { low, medium, high, urgent }
 
-// COMPLAINT CATEGORIES 
+// COMPLAINT CATEGORIES
 const List<String> complaintCategories = [
   'Kualitas Produk',
   'Pengiriman',
@@ -75,7 +71,7 @@ const List<String> complaintCategories = [
   'Lainnya'
 ];
 
-// CUSTOMER COMPLAINT PAGE 
+// CUSTOMER COMPLAINT PAGE
 class ComplaintPage extends StatefulWidget {
   final String currentUserId;
   final String currentUserName;
@@ -152,32 +148,60 @@ class _ComplaintPageState extends State<ComplaintPage>
   }
 
   List<Complaint> get myComplaints =>
-      allComplaints
-          .where((c) => c.customerId == widget.currentUserId)
-          .toList();
+      allComplaints.where((c) => c.customerId == widget.currentUserId).toList();
 
   @override
   Widget build(BuildContext context) {
+    // revisi presentasi kemarin
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Keluhan & Feedback'),
+        title: const Text(
+          'Keluhan & Feedback',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold, // Tambahkan bold agar lebih tegas
+          ),
+        ),
         backgroundColor: kGreen,
         elevation: 0,
+        actions: [
+          // Chat Icon
+          IconButton(
+            icon: const Icon(
+              Icons.message,
+              color: Colors.white,
+              size: 26,
+            ),
+            tooltip: 'Chat dengan Asisten',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const chatbot.ChatbotPage()),
+              );
+            },
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: Colors.white,
+          indicatorColor: Colors.white, // Warna garis bawah tab aktif
+          indicatorWeight: 3.0,
+          labelColor: Colors
+              .white, // Warna teks untuk tab yang SEDANG AKTIF (Putih terang)
+          unselectedLabelColor: Colors
+              .white54, // Warna teks untuk tab yang TIDAK AKTIF (Putih redup/transparan)
+
+          labelStyle:
+              const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
           tabs: const [
-            Tab(text: 'Riwayat Keluhan'),
             Tab(text: 'Buat Keluhan Baru'),
+            Tab(text: 'Riwayat Keluhan'),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          // Tab 1: Riwayat Keluhan
-          ComplaintHistoryTab(complaints: myComplaints),
-          // Tab 2: Form Keluhan Baru
           NewComplaintForm(
             currentUserId: widget.currentUserId,
             currentUserName: widget.currentUserName,
@@ -186,7 +210,10 @@ class _ComplaintPageState extends State<ComplaintPage>
               setState(() {
                 allComplaints.add(complaint);
               });
-              _tabController.animateTo(0);
+
+              _tabController.animateTo(
+                  1); // Setelah disubmit, otomatis pindah ke tab Riwayat (Index 1)
+
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text('Keluhan berhasil disubmit'),
@@ -195,6 +222,8 @@ class _ComplaintPageState extends State<ComplaintPage>
               );
             },
           ),
+          // Index 1: Riwayat Keluhan
+          ComplaintHistoryTab(complaints: myComplaints),
         ],
       ),
     );
@@ -247,7 +276,7 @@ class ComplaintHistoryTab extends StatelessWidget {
   }
 }
 
-// COMPLAINT CARD 
+// COMPLAINT CARD
 class ComplaintCard extends StatelessWidget {
   final Complaint complaint;
 
@@ -496,7 +525,7 @@ class ComplaintCard extends StatelessWidget {
   }
 }
 
-// COMPLAINT DETAIL PAGE 
+// COMPLAINT DETAIL PAGE
 class ComplaintDetailPage extends StatelessWidget {
   final Complaint complaint;
 
@@ -888,7 +917,7 @@ class ComplaintDetailPage extends StatelessWidget {
   }
 }
 
-// NEW COMPLAINT FORM 
+// NEW COMPLAINT FORM
 class NewComplaintForm extends StatefulWidget {
   final String currentUserId;
   final String currentUserName;
@@ -1337,14 +1366,23 @@ class _AdminComplaintPageState extends State<AdminComplaintPage> {
             child: Row(
               children: [
                 Expanded(
-                  child: _buildFilterChip('Status', ['Semua', 'Diajukan', 'Ditinjau', 'Sedang Ditangani', 'Terselesaikan'],
+                  child: _buildFilterChip(
+                      'Status',
+                      [
+                        'Semua',
+                        'Diajukan',
+                        'Ditinjau',
+                        'Sedang Ditangani',
+                        'Terselesaikan'
+                      ],
                       _filterStatus, (value) {
                     setState(() => _filterStatus = value);
                   }),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: _buildFilterChip('Prioritas',
+                  child: _buildFilterChip(
+                      'Prioritas',
                       ['Semua', 'Rendah', 'Sedang', 'Tinggi', 'Mendesak'],
                       _filterPriority, (value) {
                     setState(() => _filterPriority = value);
@@ -1666,7 +1704,7 @@ class AdminComplaintCard extends StatelessWidget {
   }
 }
 
-// = ADMIN COMPLAINT DETAIL PAGE 
+// = ADMIN COMPLAINT DETAIL PAGE
 class AdminComplaintDetailPage extends StatefulWidget {
   final Complaint complaint;
 
