@@ -24,6 +24,11 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _obscurePassword = true;
   bool _agreeTerms = false;
   bool _isLoading = false;
+  String _registrationType = 'User'; // 'User' atau 'UMKM'
+
+  // UMKM specific controllers
+  final _storeNameController = TextEditingController();
+  final _businessDescController = TextEditingController();
 
   void _register() {
     if (_nameController.text.isEmpty ||
@@ -32,6 +37,15 @@ class _RegisterPageState extends State<RegisterPage> {
         _passwordController.text.isEmpty) {
       _showErrorSnackBar('Semua field harus diisi');
       return;
+    }
+
+    // Validate UMKM fields
+    if (_registrationType == 'UMKM') {
+      if (_storeNameController.text.isEmpty ||
+          _businessDescController.text.isEmpty) {
+        _showErrorSnackBar('Nama toko dan deskripsi usaha harus diisi');
+        return;
+      }
     }
 
     if (_passwordController.text.length < 8) {
@@ -52,8 +66,10 @@ class _RegisterPageState extends State<RegisterPage> {
 
       // Show success message and navigate to login
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Akun berhasil dibuat! Silakan login.'),
+        SnackBar(
+          content: Text(
+            'Akun $_registrationType berhasil dibuat! Silakan login.',
+          ),
           backgroundColor: kGreen,
         ),
       );
@@ -124,6 +140,43 @@ class _RegisterPageState extends State<RegisterPage> {
                   ),
                 ),
                 const SizedBox(height: 32),
+
+                // ===== REGISTRATION TYPE SELECTOR =====
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'TIPE PENDAFTARAN',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: kDark,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildTypeButton(
+                            label: 'User',
+                            isSelected: _registrationType == 'User',
+                            onTap: () => setState(() => _registrationType = 'User'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildTypeButton(
+                            label: 'UMKM',
+                            isSelected: _registrationType == 'UMKM',
+                            onTap: () => setState(() => _registrationType = 'UMKM'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
 
                 // ===== NAMA LENGKAP INPUT =====
                 Column(
@@ -246,6 +299,87 @@ class _RegisterPageState extends State<RegisterPage> {
                   ],
                 ),
                 const SizedBox(height: 16),
+
+                // ===== UMKM FIELDS (Conditional) =====
+                if (_registrationType == 'UMKM') ...[
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'NAMA TOKO/USAHA',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: kDark,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _storeNameController,
+                        decoration: InputDecoration(
+                          hintText: 'Nama toko/usaha Anda',
+                          hintStyle: TextStyle(color: kGray.withValues(alpha: 0.5)),
+                          prefixIcon: Icon(Icons.storefront_outlined, color: kGray),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: kBorder),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: kBorder),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(color: kGreen, width: 2),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'DESKRIPSI USAHA',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: kDark,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _businessDescController,
+                        maxLines: 3,
+                        decoration: InputDecoration(
+                          hintText: 'Jelaskan produk/layanan Anda',
+                          hintStyle: TextStyle(color: kGray.withValues(alpha: 0.5)),
+                          prefixIcon: Icon(Icons.description_outlined, color: kGray),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: kBorder),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: kBorder),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(color: kGreen, width: 2),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                ],
 
                 // ===== PASSWORD INPUT =====
                 Column(
@@ -509,6 +643,37 @@ class _RegisterPageState extends State<RegisterPage> {
     );
   }
 
+  Widget _buildTypeButton({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: isSelected ? kGreen : kBorder,
+            width: isSelected ? 2 : 1,
+          ),
+          borderRadius: BorderRadius.circular(8),
+          color: isSelected ? kGreenPale : Colors.white,
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: isSelected ? kGreen : kGray,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSocialButton({
     required String icon,
     required String label,
@@ -550,6 +715,8 @@ class _RegisterPageState extends State<RegisterPage> {
     _emailController.dispose();
     _whatsappController.dispose();
     _passwordController.dispose();
+    _storeNameController.dispose();
+    _businessDescController.dispose();
     super.dispose();
   }
 }

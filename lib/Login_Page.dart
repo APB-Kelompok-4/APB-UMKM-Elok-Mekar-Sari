@@ -24,6 +24,7 @@ class _LoginPageState extends State<LoginPage> {
   bool _obscurePassword = true;
   bool _rememberMe = false;
   bool _isLoading = false;
+  String _selectedRole = 'User';
 
   void _login() {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
@@ -36,9 +37,38 @@ class _LoginPageState extends State<LoginPage> {
     // Simulate login process
     Future.delayed(const Duration(seconds: 2), () {
       setState(() => _isLoading = false);
-      
-      // Navigate to home page (MainPage) - bisa login dengan data apa saja
-      Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+
+      // Check if login as Admin with hardcoded credentials (regardless of selected role)
+      if (_emailController.text == 'admin123' &&
+          _passwordController.text == 'AdminTes123') {
+        // Admin login successful
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Login Admin berhasil!'),
+            backgroundColor: kGreen,
+          ),
+        );
+        Navigator.pushNamedAndRemoveUntil(context, '/admin', (route) => false);
+        return;
+      }
+
+      // For User and UMKM roles, navigate to respective pages
+      String routeName = '/home'; // Default for User
+      String roleLabel = 'User';
+
+      if (_selectedRole == 'UMKM') {
+        routeName = '/umkm';
+        roleLabel = 'UMKM';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Login $roleLabel berhasil!'),
+          backgroundColor: kGreen,
+        ),
+      );
+
+      Navigator.pushNamedAndRemoveUntil(context, routeName, (route) => false);
     });
   }
 
@@ -149,6 +179,52 @@ class _LoginPageState extends State<LoginPage> {
                   ],
                 ),
                 const SizedBox(height: 24),
+
+                // ===== ROLE SELECTION =====
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Jenis Pengguna',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: kDark,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      initialValue: _selectedRole,
+                      items: ['User', 'UMKM'].map((role) {
+                        return DropdownMenuItem(
+                          value: role,
+                          child: Text(role),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() => _selectedRole = value!);
+                      },
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: kBorder),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: kBorder),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: kGreen, width: 2),
+                        ),
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
 
                 // ===== EMAIL INPUT =====
                 Column(
@@ -430,6 +506,17 @@ class _LoginPageState extends State<LoginPage> {
                       style: TextStyle(
                         fontSize: 10,
                         color: kGray.withOpacity(0.6),
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    // Test Credentials Hint
+                    Text(
+                      '👉 Admin: admin123 / AdminTes123 (bisa login dari User/UMKM)',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 9,
+                        color: kGray.withValues(alpha: 0.4),
                         letterSpacing: 0.2,
                       ),
                     ),

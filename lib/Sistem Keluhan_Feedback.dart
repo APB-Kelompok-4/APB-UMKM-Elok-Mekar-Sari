@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'Chatbot.dart' as chatbot;
+import 'models/complaint.dart';
+import 'services/complaint_service.dart';
 
 const kGreen = Color(0xFF2D5A27);
 const kGreenLight = Color(0xFF4A8C3F);
@@ -10,66 +12,6 @@ const kDark = Color(0xFF1A1A1A);
 const kGray = Color(0xFF666666);
 const kBorder = Color(0xFFE0D8CC);
 const kBg = Color(0xFFFAFAF7);
-
-//= COMPLAINT =
-class Complaint {
-  final String id;
-  final String customerId;
-  final String customerName;
-  final String customerEmail;
-  final String subject;
-  final String description;
-  final String category;
-  final ComplaintStatus status;
-  final ComplaintPriority priority;
-  final DateTime createdDate;
-  final DateTime? resolvedDate;
-  final String? adminResponse;
-  final String? resolution;
-  final int rating; // 1-5 untuk kepuasan resolusi
-  final List<String> attachments; // File paths
-
-  Complaint({
-    required this.id,
-    required this.customerId,
-    required this.customerName,
-    required this.customerEmail,
-    required this.subject,
-    required this.description,
-    required this.category,
-    required this.status,
-    required this.priority,
-    required this.createdDate,
-    this.resolvedDate,
-    this.adminResponse,
-    this.resolution,
-    this.rating = 0,
-    this.attachments = const [],
-  });
-}
-
-enum ComplaintStatus {
-  submitted,
-  reviewed,
-  inProgress,
-  waitingCustomer,
-  resolved,
-  closed,
-  rejected
-}
-
-enum ComplaintPriority { low, medium, high, urgent }
-
-// COMPLAINT CATEGORIES
-const List<String> complaintCategories = [
-  'Kualitas Produk',
-  'Pengiriman',
-  'Layanan Pelanggan',
-  'Pembayaran',
-  'Produk Tidak Sesuai',
-  'Produk Rusak',
-  'Lainnya'
-];
 
 // CUSTOMER COMPLAINT PAGE
 class ComplaintPage extends StatefulWidget {
@@ -91,49 +33,6 @@ class ComplaintPage extends StatefulWidget {
 class _ComplaintPageState extends State<ComplaintPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final List<Complaint> allComplaints = [
-    Complaint(
-      id: 'CMP-001',
-      customerId: 'USR-001',
-      customerName: 'Budi Santoso',
-      customerEmail: 'budi@email.com',
-      subject: 'Produk Rusak Saat Tiba',
-      description: 'Produk yang saya terima sudah rusak, layar retak.',
-      category: 'Produk Rusak',
-      status: ComplaintStatus.resolved,
-      priority: ComplaintPriority.high,
-      createdDate: DateTime.now().subtract(const Duration(days: 5)),
-      resolvedDate: DateTime.now().subtract(const Duration(days: 2)),
-      adminResponse: 'Kami akan mengirimkan pengganti...',
-      resolution: 'Produk diganti dengan yang baru',
-      rating: 4,
-    ),
-    Complaint(
-      id: 'CMP-002',
-      customerId: 'USR-001',
-      customerName: 'Budi Santoso',
-      customerEmail: 'budi@email.com',
-      subject: 'Pengiriman Terlambat',
-      description: 'Pesanan saya sudah 10 hari tapi belum tiba.',
-      category: 'Pengiriman',
-      status: ComplaintStatus.inProgress,
-      priority: ComplaintPriority.medium,
-      createdDate: DateTime.now().subtract(const Duration(days: 10)),
-      adminResponse: 'Tim logistik sedang mengecek lokasi paket Anda.',
-    ),
-    Complaint(
-      id: 'CMP-003',
-      customerId: 'USR-002',
-      customerName: 'Siti Nurhaliza',
-      customerEmail: 'siti@email.com',
-      subject: 'Produk Tidak Sesuai dengan Deskripsi',
-      description: 'Ukuran produk tidak sesuai dengan yang tertera di website.',
-      category: 'Produk Tidak Sesuai',
-      status: ComplaintStatus.reviewed,
-      priority: ComplaintPriority.medium,
-      createdDate: DateTime.now().subtract(const Duration(days: 3)),
-    ),
-  ];
 
   @override
   void initState() {
@@ -148,7 +47,7 @@ class _ComplaintPageState extends State<ComplaintPage>
   }
 
   List<Complaint> get myComplaints =>
-      allComplaints.where((c) => c.customerId == widget.currentUserId).toList();
+      ComplaintService.complaints.where((c) => c.customerId == widget.currentUserId).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -208,7 +107,7 @@ class _ComplaintPageState extends State<ComplaintPage>
             currentUserEmail: widget.currentUserEmail,
             onSubmit: (complaint) {
               setState(() {
-                allComplaints.add(complaint);
+                ComplaintService.addComplaint(complaint);
               });
 
               _tabController.animateTo(
@@ -717,6 +616,62 @@ class ComplaintDetailPage extends StatelessWidget {
                 ],
               ),
             if (complaint.adminResponse != null) const SizedBox(height: 16),
+
+            // Chat History
+            if (complaint.chat.isNotEmpty)
+              _buildSection(
+                'Riwayat Chat',
+                [
+                  Container(
+                    height: 200,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: kBorder),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: ListView.builder(
+                      padding: const EdgeInsets.all(8),
+                      itemCount: complaint.chat.length,
+                      itemBuilder: (context, index) {
+                        final chat = complaint.chat[index];
+                        final isAdmin = chat['sender'] == 'admin';
+                        return Align(
+                          alignment: isAdmin ? Alignment.centerRight : Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(vertical: 4),
+                            padding: const EdgeInsets.all(8),
+                            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
+                            decoration: BoxDecoration(
+                              color: isAdmin ? kGreen : Colors.grey[200],
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  chat['message'],
+                                  style: TextStyle(
+                                    color: isAdmin ? Colors.white : kDark,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  chat['time'],
+                                  style: TextStyle(
+                                    color: isAdmin ? Colors.white70 : kGray,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            if (complaint.chat.isNotEmpty) const SizedBox(height: 16),
 
             // Resolusi
             if (complaint.resolution != null)

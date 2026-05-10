@@ -5,6 +5,8 @@ import 'Sistem Keluhan_Feedback.dart' as feedback;
 import 'profile.dart';
 import 'Login_Page.dart';
 import 'Register_Page.dart';
+import 'Admin_Page.dart';
+import 'UMKM_Page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,6 +28,8 @@ class UMKMApp extends StatelessWidget {
       home: const LoginPage(),
       routes: {
         '/home': (context) => MainPage(),
+        '/admin': (context) => const AdminPage(),
+        '/umkm': (context) => const UMKMPage(),
         '/register': (context) => const RegisterPage(),
       },
     );
