@@ -135,7 +135,7 @@ class DashboardTab extends StatelessWidget {
               Expanded(
                 child: _buildSummaryCard(
                   'Keluhan Pending',
-                  '3',
+                  _getPendingComplaintCount().toString(),
                   Icons.report_problem,
                   Colors.orange,
                 ),
@@ -182,6 +182,37 @@ class DashboardTab extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  int _getPendingComplaintCount() {
+    return ComplaintService.complaints.where((complaint) {
+      return complaint.status == ComplaintStatus.submitted ||
+          complaint.status == ComplaintStatus.inProgress ||
+          complaint.status == ComplaintStatus.reviewed ||
+          complaint.status == ComplaintStatus.waitingCustomer;
+    }).length;
+  }
+
+  List<Complaint> _getPendingComplaints() {
+    return ComplaintService.complaints.where((complaint) {
+      return complaint.status == ComplaintStatus.submitted ||
+          complaint.status == ComplaintStatus.inProgress ||
+          complaint.status == ComplaintStatus.reviewed ||
+          complaint.status == ComplaintStatus.waitingCustomer;
+    }).toList();
+  }
+
+  String _priorityToString(ComplaintPriority priority) {
+    switch (priority) {
+      case ComplaintPriority.low:
+        return 'Rendah';
+      case ComplaintPriority.medium:
+        return 'Sedang';
+      case ComplaintPriority.high:
+        return 'Tinggi';
+      case ComplaintPriority.urgent:
+        return 'Mendesak';
+    }
   }
 
   Widget _buildSummaryCard(String title, String value, IconData icon, Color color) {
@@ -251,26 +282,39 @@ class DashboardTab extends StatelessWidget {
   }
 
   Widget _buildPendingComplaintsList() {
-    final complaints = [
-      {'id': '001', 'customer': 'Alice', 'subject': 'Keripik tempe rusak', 'priority': 'Tinggi'},
-      {'id': '002', 'customer': 'Charlie', 'subject': 'Pengiriman terlambat', 'priority': 'Sedang'},
-    ];
+    final pendingComplaints = _getPendingComplaints();
+
+    if (pendingComplaints.isEmpty) {
+      return Card(
+        color: kBg,
+        margin: const EdgeInsets.only(bottom: 8),
+        child: const Padding(
+          padding: EdgeInsets.all(16),
+          child: Text(
+            'Tidak ada keluhan pending saat ini.',
+            style: TextStyle(color: kGray),
+          ),
+        ),
+      );
+    }
 
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: complaints.length,
+      itemCount: pendingComplaints.length,
       itemBuilder: (context, index) {
-        final complaint = complaints[index];
+        final complaint = pendingComplaints[index];
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
           child: ListTile(
-            title: Text('Keluhan #${complaint['id']} - ${complaint['subject']}'),
-            subtitle: Text('Dari: ${complaint['customer']}'),
+            title: Text('Keluhan #${complaint.id} - ${complaint.productName ?? complaint.subject}'),
+            subtitle: Text('Dari: ${complaint.customerName}'),
             trailing: Text(
-              complaint['priority']!,
+              _priorityToString(complaint.priority),
               style: TextStyle(
-                color: complaint['priority'] == 'Tinggi' ? Colors.red : Colors.orange,
+                color: complaint.priority == ComplaintPriority.high || complaint.priority == ComplaintPriority.urgent
+                    ? Colors.red
+                    : Colors.orange,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -306,63 +350,63 @@ class _ProductManagementTabState extends State<ProductManagementTab> {
   final List<Map<String, dynamic>> _products = [
     {
       'id': '1',
-      'name': 'Keripik Tempe Original',
+      'name': 'Nugget Lele',
       'price': 25000,
       'stock': 50,
-      'category': 'Makanan Ringan',
+      'category': 'Makanan',
       'active': true,
-      'image': '🥔',
-      'description': 'Keripik tempe gurih dengan bumbu tradisional'
+      'image': '🍗',
+      'description': 'Nugget lele olahan ikan lele tanpa pengawet'
     },
     {
       'id': '2',
-      'name': 'Keripik Tempe Pedas',
-      'price': 28000,
+      'name': 'Sempol Jamur',
+      'price': 22000,
       'stock': 45,
-      'category': 'Makanan Ringan',
+      'category': 'Makanan',
       'active': true,
-      'image': '🌶️',
-      'description': 'Keripik tempe dengan level pedas yang pas'
+      'image': '🍄',
+      'description': 'Sempol jamur tiram renyah dan gurih'
     },
     {
       'id': '3',
-      'name': 'Keripik Tempe Keju',
-      'price': 30000,
-      'stock': 30,
-      'category': 'Makanan Ringan',
+      'name': 'Tahu Walik',
+      'price': 20000,
+      'stock': 40,
+      'category': 'Makanan',
       'active': true,
-      'image': '🧀',
-      'description': 'Keripik tempe dengan taburan keju gurih'
+      'image': '🥟',
+      'description': 'Tahu walik isi sayuran dan daging lezat'
     },
     {
       'id': '4',
-      'name': 'Keripik Tempe Jagung',
-      'price': 27000,
-      'stock': 40,
-      'category': 'Makanan Ringan',
+      'name': 'Jangkrik Krispi',
+      'price': 18000,
+      'stock': 35,
+      'category': 'Makanan',
       'active': true,
-      'image': '🌽',
-      'description': 'Keripik tempe dengan campuran jagung manis'
+      'image': '🦗',
+      'description': 'Jangkrik krispi gurih, cemilan unik khas UMKM'
     },
     {
       'id': '5',
-      'name': 'Keripik Tempe Terasi',
-      'price': 26000,
-      'stock': 35,
-      'category': 'Makanan Ringan',
+      'name': 'Sinom',
+      'price': 15000,
+      'stock': 30,
+      'category': 'Minuman',
       'active': true,
-      'image': '🐟',
-      'description': 'Keripik tempe dengan aroma terasi khas'
+      'image': '🥤',
+      'description': 'Minuman sinom tradisional segar dengan rempah'
     },
     {
       'id': '6',
-      'name': 'Paket Keripik Campur',
-      'price': 75000,
-      'stock': 20,
-      'category': 'Paket',
+      'name': 'Sate Jamur',
+      'price': 27000,
+      'stock': 25,
+      'category': 'Makanan',
       'active': true,
-      'image': '📦',
-      'description': 'Paket berbagai varian keripik tempe (5 rasa)'
+      'image': '🍢',
+      'description': 'Sate jamur dengan bumbu panggang khas UMKM'
     },
   ];
 
@@ -411,152 +455,189 @@ class _ProductManagementTabState extends State<ProductManagementTab> {
     final TextEditingController priceController = TextEditingController();
     final TextEditingController stockController = TextEditingController();
     final TextEditingController descriptionController = TextEditingController();
-    String selectedCategory = 'Makanan Ringan';
+    String selectedCategory = 'Makanan';
     String? selectedImagePath;
 
-    final List<String> categories = ['Makanan Ringan', 'Paket'];
+    final List<String> categories = ['Makanan', 'Minuman'];
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Tambah Produk Baru'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Nama Produk',
-                    border: OutlineInputBorder(),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 16,
+            right: 16,
+            top: 16,
+          ),
+          child: StatefulBuilder(
+            builder: (context, setState) => SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Tambah Produk Baru',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: priceController,
-                  decoration: const InputDecoration(
-                    labelText: 'Harga (Rp)',
-                    border: OutlineInputBorder(),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Nama Produk',
+                      border: OutlineInputBorder(),
+                    ),
                   ),
-                  keyboardType: TextInputType.number,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: stockController,
-                  decoration: const InputDecoration(
-                    labelText: 'Stok',
-                    border: OutlineInputBorder(),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: priceController,
+                    decoration: const InputDecoration(
+                      labelText: 'Harga (Rp)',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
                   ),
-                  keyboardType: TextInputType.number,
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  initialValue: selectedCategory,
-                  items: categories.map((category) {
-                    return DropdownMenuItem(
-                      value: category,
-                      child: Text(category),
-                    );
-                  }).toList(),
-                  onChanged: (value) => setState(() => selectedCategory = value!),
-                  decoration: const InputDecoration(
-                    labelText: 'Kategori',
-                    border: OutlineInputBorder(),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: stockController,
+                    decoration: const InputDecoration(
+                      labelText: 'Stok',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
                   ),
-                ),
-                const SizedBox(height: 16),
-                const Text('Upload Gambar Produk', style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: selectedImagePath == null
-                          ? Container(
-                              height: 100,
-                              decoration: BoxDecoration(
-                                border: Border.all(color: kBorder),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Center(
-                                child: Text('Belum memilih gambar'),
-                              ),
-                            )
-                          : ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.file(
-                                File(selectedImagePath!),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedCategory,
+                    items: categories.map((category) {
+                      return DropdownMenuItem(
+                        value: category,
+                        child: Text(category),
+                      );
+                    }).toList(),
+                    onChanged: (value) => setState(() => selectedCategory = value!),
+                    decoration: const InputDecoration(
+                      labelText: 'Kategori',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Upload Gambar Produk', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: selectedImagePath == null
+                            ? Container(
                                 height: 100,
-                                width: double.infinity,
-                                fit: BoxFit.cover,
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: kBorder),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Center(
+                                  child: Text('Belum memilih gambar'),
+                                ),
+                              )
+                            : ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.file(
+                                  File(selectedImagePath!),
+                                  height: 100,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                ),
                               ),
-                            ),
-                    ),
-                    const SizedBox(width: 12),
-                    ElevatedButton.icon(
-                      onPressed: () async {
-                        final path = await _pickImage();
-                        if (path != null) {
-                          setState(() => selectedImagePath = path);
-                        }
-                      },
-                      icon: const Icon(Icons.upload_file),
-                      label: const Text('Pilih'),
-                      style: ElevatedButton.styleFrom(backgroundColor: kGreen),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: descriptionController,
-                  decoration: const InputDecoration(
-                    labelText: 'Deskripsi Produk',
-                    border: OutlineInputBorder(),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          final path = await _pickImage();
+                          if (path != null) {
+                            setState(() => selectedImagePath = path);
+                          }
+                        },
+                        icon: const Icon(Icons.upload_file),
+                        label: const Text('Pilih'),
+                        style: ElevatedButton.styleFrom(backgroundColor: kGreen),
+                      ),
+                    ],
                   ),
-                  maxLines: 3,
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: descriptionController,
+                    decoration: const InputDecoration(
+                      labelText: 'Deskripsi Produk',
+                      border: OutlineInputBorder(),
+                    ),
+                    maxLines: 3,
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Batal'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            if (nameController.text.isNotEmpty &&
+                                priceController.text.isNotEmpty &&
+                                stockController.text.isNotEmpty &&
+                                descriptionController.text.isNotEmpty) {
+                              setState(() {
+                                _products.add({
+                                  'id': (_products.length + 1).toString(),
+                                  'name': nameController.text,
+                                  'price': int.parse(priceController.text),
+                                  'stock': int.parse(stockController.text),
+                                  'category': selectedCategory,
+                                  'active': true,
+                                  'image': selectedImagePath ?? '📦',
+                                  'description': descriptionController.text,
+                                });
+                              });
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Produk berhasil ditambahkan')),
+                              );
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Harap isi semua field')),
+                              );
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(backgroundColor: kGreen),
+                          child: const Text('Tambah'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Batal'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (nameController.text.isNotEmpty &&
-                    priceController.text.isNotEmpty &&
-                    stockController.text.isNotEmpty &&
-                    descriptionController.text.isNotEmpty) {
-                  setState(() {
-                    _products.add({
-                      'id': (_products.length + 1).toString(),
-                      'name': nameController.text,
-                      'price': int.parse(priceController.text),
-                      'stock': int.parse(stockController.text),
-                      'category': selectedCategory,
-                      'active': true,
-                      'image': selectedImagePath ?? '📦',
-                      'description': descriptionController.text,
-                    });
-                  });
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Produk berhasil ditambahkan')),
-                  );
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Harap isi semua field')),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: kGreen),
-              child: const Text('Tambah'),
-            ),
-          ],
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -571,7 +652,7 @@ class _ProductManagementTabState extends State<ProductManagementTab> {
         ? product['image']
         : null;
 
-    final List<String> categories = ['Makanan Ringan', 'Paket'];
+    final List<String> categories = ['Makanan', 'Minuman'];
 
     showDialog(
       context: context,
@@ -998,6 +1079,7 @@ class _ComplaintManagementTabState extends State<ComplaintManagementTab> {
       'description': complaint.description,
       'priority': _priorityToString(complaint.priority),
       'status': _statusToString(complaint.status),
+      'product': complaint.productName ?? 'Umum',
       'date': complaint.createdDate.toString().split(' ')[0],
       'chat': complaint.chat,
     }).toList();

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 
 const kGreen = Color(0xFF2D5A27);
 const kGreenLight = Color(0xFF4A8C3F);
@@ -29,6 +31,14 @@ class _UMKMPageState extends State<UMKMPage> {
     ProfileTab(),
   ];
 
+  static const List<String> _appBarTitles = <String>[
+    'UMKM Panel',
+    'Produk',
+    'Order',
+    'Laporan',
+    'Profil',
+  ];
+
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
@@ -39,7 +49,7 @@ class _UMKMPageState extends State<UMKMPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('UMKM Panel'),
+        title: Text(_appBarTitles[_selectedIndex]),
         backgroundColor: kGreen,
         elevation: 0,
       ),
@@ -303,9 +313,11 @@ class UMKMDashboardTab extends StatelessWidget {
 
   Widget _buildTopProductsList() {
     final products = [
-      {'name': 'Nasi Gudeg', 'sold': 28, 'revenue': 'Rp 700.000'},
-      {'name': 'Keripik Tempe', 'sold': 35, 'revenue': 'Rp 525.000'},
-      {'name': 'Sambal Goreng', 'sold': 15, 'revenue': 'Rp 300.000'},
+      {'name': 'Nugget Lele', 'sold': 35, 'revenue': 'Rp 525.000'},
+      {'name': 'Sempol Jamur', 'sold': 28, 'revenue': 'Rp 420.000'},
+      {'name': 'Tahu Walik', 'sold': 22, 'revenue': 'Rp 330.000'},
+      {'name': 'Jangkrik Krispi', 'sold': 18, 'revenue': 'Rp 270.000'},
+      {'name': 'Sate Jamur', 'sold': 15, 'revenue': 'Rp 225.000'},
     ];
 
     return ListView.builder(
@@ -360,33 +372,63 @@ class _ManageProductTabState extends State<ManageProductTab> {
   final List<Map<String, dynamic>> _products = [
     {
       'id': '1',
-      'name': 'Nasi Gudeg',
+      'name': 'Nugget Lele',
       'price': 25000,
       'stock': 50,
       'category': 'Makanan',
       'active': true,
       'image': '🍛',
-      'description': 'Nasi dengan gudeg asli Yogyakarta'
+      'description': 'Nugget lele olahan alami tanpa pengawet'
     },
     {
       'id': '2',
-      'name': 'Keripik Tempe',
+      'name': 'Sempol Jamur',
       'price': 15000,
-      'stock': 10,
+      'stock': 30,
       'category': 'Snack',
       'active': true,
-      'image': '🥔',
-      'description': 'Keripik tempe renyah dan gurih'
+      'image': '🍄',
+      'description': 'Sempol jamur tiram renyah dan gurih'
     },
     {
       'id': '3',
-      'name': 'Sambal Goreng',
+      'name': 'Tahu Walik',
       'price': 20000,
-      'stock': 5,
-      'category': 'Condiment',
+      'stock': 20,
+      'category': 'Makanan',
       'active': true,
-      'image': '🌶️',
-      'description': 'Sambal goreng homemade'
+      'image': '🍲',
+      'description': 'Tahu walik isi ayam homemade'
+    },
+    {
+      'id': '4',
+      'name': 'Jangkrik Krispi',
+      'price': 18000,
+      'stock': 15,
+      'category': 'Snack',
+      'active': true,
+      'image': '🐜',
+      'description': 'Jangkrik krispi gurih dan bergizi'
+    },
+    {
+      'id': '5',
+      'name': 'Sinom',
+      'price': 12000,
+      'stock': 40,
+      'category': 'Minuman',
+      'active': true,
+      'image': '🥤',
+      'description': 'Minuman sinom segar dari bahan alami'
+    },
+    {
+      'id': '6',
+      'name': 'Sate Jamur',
+      'price': 22000,
+      'stock': 25,
+      'category': 'Makanan',
+      'active': true,
+      'image': '🍢',
+      'description': 'Sate jamur tiram dengan bumbu spesial'
     },
   ];
 
@@ -487,10 +529,12 @@ class _ManageProductTabState extends State<ManageProductTab> {
                 children: [
                   Row(
                     children: [
-                      Text(
-                        product['image'],
-                        style: const TextStyle(fontSize: 40),
-                      ),
+                      product['isFile'] == true
+                          ? Image.file(File(product['image']), height: 40, width: 40, fit: BoxFit.cover)
+                          : Text(
+                              product['image'],
+                              style: const TextStyle(fontSize: 40),
+                            ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -526,28 +570,49 @@ class _ManageProductTabState extends State<ManageProductTab> {
                     children: [
                       ElevatedButton.icon(
                         onPressed: () => _editStock(index),
-                        icon: const Icon(Icons.edit),
-                        label: const Text('Stok'),
+                        icon: const Icon(Icons.edit, color: Colors.black),
+                        label: const Text(
+                          'Stok',
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black,
                         ),
                       ),
                       const SizedBox(width: 8),
                       ElevatedButton.icon(
                         onPressed: () => _editProduct(index),
-                        icon: const Icon(Icons.edit),
-                        label: const Text('Edit'),
+                        icon: const Icon(Icons.edit, color: Colors.black),
+                        label: const Text(
+                          'Edit',
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: kGreen,
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black,
                         ),
                       ),
                       const SizedBox(width: 8),
                       ElevatedButton.icon(
                         onPressed: () => _deleteProduct(index),
-                        icon: const Icon(Icons.delete),
-                        label: const Text('Hapus'),
+                        icon: const Icon(Icons.delete, color: Colors.black),
+                        label: const Text(
+                          'Hapus',
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black,
                         ),
                       ),
                     ],
@@ -560,8 +625,9 @@ class _ManageProductTabState extends State<ManageProductTab> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _addProduct,
-        backgroundColor: kGreen,
-        child: const Icon(Icons.add),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        child: const Icon(Icons.add, color: Colors.black),
       ),
     );
   }
@@ -795,10 +861,8 @@ class SalesReportTab extends StatelessWidget {
                           ),
                           leftTitles: AxisTitles(
                             sideTitles: SideTitles(
-                              showTitles: true,
-                              getTitlesWidget: (value, meta) {
-                                return Text('${value ~/ 100}JT');
-                              },
+                              showTitles: false,
+                              reservedSize: 0,
                             ),
                           ),
                         ),
@@ -900,10 +964,17 @@ class SalesReportTab extends StatelessWidget {
                   const SnackBar(content: Text('Laporan siap diunduh')),
                 );
               },
-              icon: const Icon(Icons.download),
-              label: const Text('Download Laporan'),
+              icon: const Icon(Icons.download, color: Colors.black),
+              label: const Text(
+                'Download Laporan',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: kGreen,
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -926,11 +997,11 @@ class SalesReportTab extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            _buildProductRow('🍛 Nasi Gudeg', '28 terjual', 'Rp 700.000'),
+            _buildProductRow('Nugget Lele', '35 terjual', 'Rp 525.000'),
             const SizedBox(height: 12),
-            _buildProductRow('🥔 Keripik Tempe', '35 terjual', 'Rp 525.000'),
+            _buildProductRow('Sempol Jamur', '28 terjual', 'Rp 420.000'),
             const SizedBox(height: 12),
-            _buildProductRow('🌶️ Sambal Goreng', '15 terjual', 'Rp 300.000'),
+            _buildProductRow('Tahu Walik', '22 terjual', 'Rp 330.000'),
           ],
         ),
       ),
@@ -1149,10 +1220,17 @@ class _ProfileTabState extends State<ProfileTab> {
                   )
                 : ElevatedButton.icon(
                     onPressed: _toggleEdit,
-                    icon: const Icon(Icons.edit),
-                    label: const Text('Edit Profil'),
+                    icon: const Icon(Icons.edit, color: Colors.black),
+                    label: const Text(
+                      'Edit Profil',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: kGreen,
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -1194,10 +1272,17 @@ class _ProfileTabState extends State<ProfileTab> {
                   ),
                 );
               },
-              icon: const Icon(Icons.logout),
-              label: const Text('Logout'),
+              icon: const Icon(Icons.logout, color: Colors.black),
+              label: const Text(
+                'Logout',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,
+                foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -1289,6 +1374,18 @@ class _AddProductDialogState extends State<AddProductDialog> {
   final _categoryController = TextEditingController();
   final _descriptionController = TextEditingController();
   String _selectedImage = '🍛';
+  File? _imageFile;
+
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+
+    if (pickedFile != null) {
+      setState(() {
+        _imageFile = File(pickedFile.path);
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1298,6 +1395,24 @@ class _AddProductDialogState extends State<AddProductDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Image Picker
+            GestureDetector(
+              onTap: _pickImage,
+              child: Container(
+                height: 100,
+                width: 100,
+                decoration: BoxDecoration(
+                  border: Border.all(color: kBorder),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: _imageFile != null
+                    ? Image.file(_imageFile!, fit: BoxFit.cover)
+                    : const Icon(Icons.add_photo_alternate, size: 40, color: kGray),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text('Tap untuk pilih gambar produk', style: TextStyle(color: kGray, fontSize: 12)),
+            const SizedBox(height: 16),
             TextField(
               controller: _nameController,
               decoration: const InputDecoration(labelText: 'Nama Produk'),
@@ -1350,7 +1465,8 @@ class _AddProductDialogState extends State<AddProductDialog> {
               'category': _categoryController.text,
               'description': _descriptionController.text,
               'active': true,
-              'image': _selectedImage,
+              'image': _imageFile?.path ?? _selectedImage,
+              'isFile': _imageFile != null,
             });
 
             Navigator.pop(context);
@@ -1396,6 +1512,7 @@ class _EditProductDialogState extends State<EditProductDialog> {
   late TextEditingController _priceController;
   late TextEditingController _categoryController;
   late TextEditingController _descriptionController;
+  File? _imageFile;
 
   @override
   void initState() {
@@ -1404,6 +1521,20 @@ class _EditProductDialogState extends State<EditProductDialog> {
     _priceController = TextEditingController(text: widget.product['price'].toString());
     _categoryController = TextEditingController(text: widget.product['category']);
     _descriptionController = TextEditingController(text: widget.product['description']);
+    if (widget.product['isFile'] == true) {
+      _imageFile = File(widget.product['image']);
+    }
+  }
+
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+
+    if (pickedFile != null) {
+      setState(() {
+        _imageFile = File(pickedFile.path);
+      });
+    }
   }
 
   @override
@@ -1414,6 +1545,26 @@ class _EditProductDialogState extends State<EditProductDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Image Picker
+            GestureDetector(
+              onTap: _pickImage,
+              child: Container(
+                height: 100,
+                width: 100,
+                decoration: BoxDecoration(
+                  border: Border.all(color: kBorder),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: _imageFile != null
+                    ? Image.file(_imageFile!, fit: BoxFit.cover)
+                    : (widget.product['isFile'] == true
+                        ? Image.file(File(widget.product['image']), fit: BoxFit.cover)
+                        : Text(widget.product['image'], style: const TextStyle(fontSize: 40))),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text('Tap untuk pilih gambar produk', style: TextStyle(color: kGray, fontSize: 12)),
+            const SizedBox(height: 16),
             TextField(
               controller: _nameController,
               decoration: const InputDecoration(labelText: 'Nama Produk'),
@@ -1449,6 +1600,10 @@ class _EditProductDialogState extends State<EditProductDialog> {
             widget.product['price'] = int.parse(_priceController.text);
             widget.product['category'] = _categoryController.text;
             widget.product['description'] = _descriptionController.text;
+            if (_imageFile != null) {
+              widget.product['image'] = _imageFile!.path;
+              widget.product['isFile'] = true;
+            }
 
             widget.onSave(widget.product);
             Navigator.pop(context);

@@ -20,6 +20,7 @@ class Complaint {
   final String subject;
   final String description;
   final String category;
+  final String? productName;
   final ComplaintStatus status;
   final ComplaintPriority priority;
   final DateTime createdDate;
@@ -38,6 +39,7 @@ class Complaint {
     required this.subject,
     required this.description,
     required this.category,
+    this.productName,
     required this.status,
     required this.priority,
     required this.createdDate,
@@ -57,6 +59,7 @@ class Complaint {
     String? subject,
     String? description,
     String? category,
+    String? productName,
     ComplaintStatus? status,
     ComplaintPriority? priority,
     DateTime? createdDate,
@@ -75,6 +78,7 @@ class Complaint {
       subject: subject ?? this.subject,
       description: description ?? this.description,
       category: category ?? this.category,
+      productName: productName ?? this.productName,
       status: status ?? this.status,
       priority: priority ?? this.priority,
       createdDate: createdDate ?? this.createdDate,
