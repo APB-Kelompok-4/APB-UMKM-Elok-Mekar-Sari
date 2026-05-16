@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'dart:typed_data';
+import 'services/product_service.dart';
 
 const kGreen = Color(0xFF2D5A27);
 const kGreenLight = Color(0xFF4A8C3F);
@@ -227,7 +229,8 @@ class UMKMDashboardTab extends StatelessWidget {
     );
   }
 
-  Widget _buildSummaryCard(String title, String value, IconData icon, Color color) {
+  Widget _buildSummaryCard(
+      String title, String value, IconData icon, Color color) {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(
@@ -369,87 +372,70 @@ class ManageProductTab extends StatefulWidget {
 }
 
 class _ManageProductTabState extends State<ManageProductTab> {
-  final List<Map<String, dynamic>> _products = [
-    {
-      'id': '1',
-      'name': 'Nugget Lele',
-      'price': 25000,
-      'stock': 50,
-      'category': 'Makanan',
-      'active': true,
-      'image': '🍛',
-      'description': 'Nugget lele olahan alami tanpa pengawet'
-    },
-    {
-      'id': '2',
-      'name': 'Sempol Jamur',
-      'price': 15000,
-      'stock': 30,
-      'category': 'Snack',
-      'active': true,
-      'image': '🍄',
-      'description': 'Sempol jamur tiram renyah dan gurih'
-    },
-    {
-      'id': '3',
-      'name': 'Tahu Walik',
-      'price': 20000,
-      'stock': 20,
-      'category': 'Makanan',
-      'active': true,
-      'image': '🍲',
-      'description': 'Tahu walik isi ayam homemade'
-    },
-    {
-      'id': '4',
-      'name': 'Jangkrik Krispi',
-      'price': 18000,
-      'stock': 15,
-      'category': 'Snack',
-      'active': true,
-      'image': '🐜',
-      'description': 'Jangkrik krispi gurih dan bergizi'
-    },
-    {
-      'id': '5',
-      'name': 'Sinom',
-      'price': 12000,
-      'stock': 40,
-      'category': 'Minuman',
-      'active': true,
-      'image': '🥤',
-      'description': 'Minuman sinom segar dari bahan alami'
-    },
-    {
-      'id': '6',
-      'name': 'Sate Jamur',
-      'price': 22000,
-      'stock': 25,
-      'category': 'Makanan',
-      'active': true,
-      'image': '🍢',
-      'description': 'Sate jamur tiram dengan bumbu spesial'
-    },
-  ];
-
   void _toggleProductStatus(int index) {
+    final products = ProductService.products;
     setState(() {
-      _products[index]['active'] = !_products[index]['active'];
+      products[index]['active'] = !products[index]['active'];
     });
   }
 
+  Widget _buildProductImage(Map<String, dynamic> product) {
+    final img = product['image'];
+    if (img is Uint8List && img.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: Image.memory(
+          img,
+          height: 40,
+          width: 40,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image, size: 24, color: kGray),
+        ),
+      );
+    } else if (img is String && (img.contains('/') || img.contains('\\'))) {
+      final file = File(img);
+      if (file.existsSync()) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: Image.file(
+            file,
+            height: 40,
+            width: 40,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image, size: 24, color: kGray),
+          ),
+        );
+      }
+    } else if (img is String && (img.startsWith('http://') || img.startsWith('https://'))) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: Image.network(
+          img,
+          height: 40,
+          width: 40,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image, size: 24, color: kGray),
+        ),
+      );
+    }
+    return Text(
+      img?.toString() ?? '📦',
+      style: const TextStyle(fontSize: 32),
+    );
+  }
+
   void _deleteProduct(int index) {
-    setState(() {
-      _products.removeAt(index);
-    });
+    ProductService.deleteProduct(index);
+    setState(() {});
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Produk dihapus')),
     );
   }
 
   void _editStock(int index) {
+    final products = ProductService.products;
     final TextEditingController stockController =
-        TextEditingController(text: _products[index]['stock'].toString());
+        TextEditingController(text: products[index]['stock'].toString());
 
     showDialog(
       context: context,
@@ -471,7 +457,7 @@ class _ManageProductTabState extends State<ManageProductTab> {
           ElevatedButton(
             onPressed: () {
               setState(() {
-                _products[index]['stock'] = int.parse(stockController.text);
+                products[index]['stock'] = int.parse(stockController.text);
               });
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
@@ -489,25 +475,26 @@ class _ManageProductTabState extends State<ManageProductTab> {
   void _addProduct() {
     showDialog(
       context: context,
-      builder: (context) => AddProductDialog(
-        onAdd: (newProduct) {
-          setState(() {
-            _products.add(newProduct);
-          });
-        },
-      ),
-    );
+      builder: (context) => const AddProductDialog(),
+    ).then((result) {
+      if (result != null) {
+        ProductService.addProduct(result);
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Produk berhasil ditambahkan')),
+        );
+      }
+    });
   }
 
   void _editProduct(int index) {
     showDialog(
       context: context,
       builder: (context) => EditProductDialog(
-        product: _products[index],
+        product: ProductService.products[index],
         onSave: (updatedProduct) {
-          setState(() {
-            _products[index] = updatedProduct;
-          });
+          ProductService.updateProduct(index, updatedProduct);
+          setState(() {});
         },
       ),
     );
@@ -515,12 +502,13 @@ class _ManageProductTabState extends State<ManageProductTab> {
 
   @override
   Widget build(BuildContext context) {
+    final products = ProductService.products;
     return Scaffold(
       body: ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: _products.length,
+        itemCount: products.length,
         itemBuilder: (context, index) {
-          final product = _products[index];
+          final product = products[index];
           return Card(
             margin: const EdgeInsets.only(bottom: 12),
             child: Padding(
@@ -529,12 +517,7 @@ class _ManageProductTabState extends State<ManageProductTab> {
                 children: [
                   Row(
                     children: [
-                      product['isFile'] == true
-                          ? Image.file(File(product['image']), height: 40, width: 40, fit: BoxFit.cover)
-                          : Text(
-                              product['image'],
-                              style: const TextStyle(fontSize: 40),
-                            ),
+                      _buildProductImage(product),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -643,7 +626,13 @@ class ManageOrderTab extends StatefulWidget {
 
 class _ManageOrderTabState extends State<ManageOrderTab> {
   String _selectedStatus = 'Semua';
-  final List<String> _statusOptions = ['Semua', 'Pending', 'Dikemas', 'Dikirim', 'Selesai'];
+  final List<String> _statusOptions = [
+    'Semua',
+    'Pending',
+    'Dikemas',
+    'Dikirim',
+    'Selesai'
+  ];
 
   final List<Map<String, dynamic>> _orders = [
     {
@@ -683,7 +672,9 @@ class _ManageOrderTabState extends State<ManageOrderTab> {
 
   List<Map<String, dynamic>> get _filteredOrders {
     if (_selectedStatus == 'Semua') return _orders;
-    return _orders.where((order) => order['status'] == _selectedStatus).toList();
+    return _orders
+        .where((order) => order['status'] == _selectedStatus)
+        .toList();
   }
 
   void _updateOrderStatus(int index, String newStatus) {
@@ -730,7 +721,8 @@ class _ManageOrderTabState extends State<ManageOrderTab> {
               itemCount: _filteredOrders.length,
               itemBuilder: (context, index) {
                 final order = _filteredOrders[index];
-                final actualIndex = _orders.indexWhere((o) => o['id'] == order['id']);
+                final actualIndex =
+                    _orders.indexWhere((o) => o['id'] == order['id']);
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   child: ExpansionTile(
@@ -758,14 +750,21 @@ class _ManageOrderTabState extends State<ManageOrderTab> {
                             const SizedBox(height: 8),
                             Wrap(
                               spacing: 8,
-                              children: ['Pending', 'Dikemas', 'Dikirim', 'Selesai']
-                                  .map((status) {
+                              children: [
+                                'Pending',
+                                'Dikemas',
+                                'Dikirim',
+                                'Selesai'
+                              ].map((status) {
                                 return ElevatedButton(
                                   onPressed: order['status'] == status
                                       ? null
-                                      : () => _updateOrderStatus(actualIndex, status),
+                                      : () => _updateOrderStatus(
+                                          actualIndex, status),
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: order['status'] == status ? kGray : kGreen,
+                                    backgroundColor: order['status'] == status
+                                        ? kGray
+                                        : kGreen,
                                   ),
                                   child: Text(status),
                                 );
@@ -851,8 +850,17 @@ class SalesReportTab extends StatelessWidget {
                             sideTitles: SideTitles(
                               showTitles: true,
                               getTitlesWidget: (value, meta) {
-                                const titles = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
-                                if (value.toInt() >= 0 && value.toInt() < titles.length) {
+                                const titles = [
+                                  'Sen',
+                                  'Sel',
+                                  'Rab',
+                                  'Kam',
+                                  'Jum',
+                                  'Sab',
+                                  'Min'
+                                ];
+                                if (value.toInt() >= 0 &&
+                                    value.toInt() < titles.length) {
                                   return Text(titles[value.toInt()]);
                                 }
                                 return const Text('');
@@ -870,31 +878,45 @@ class SalesReportTab extends StatelessWidget {
                         barGroups: [
                           BarChartGroupData(
                             x: 0,
-                            barRods: [BarChartRodData(toY: 300000, color: kGreen)],
+                            barRods: [
+                              BarChartRodData(toY: 300000, color: kGreen)
+                            ],
                           ),
                           BarChartGroupData(
                             x: 1,
-                            barRods: [BarChartRodData(toY: 420000, color: kGreen)],
+                            barRods: [
+                              BarChartRodData(toY: 420000, color: kGreen)
+                            ],
                           ),
                           BarChartGroupData(
                             x: 2,
-                            barRods: [BarChartRodData(toY: 280000, color: kGreen)],
+                            barRods: [
+                              BarChartRodData(toY: 280000, color: kGreen)
+                            ],
                           ),
                           BarChartGroupData(
                             x: 3,
-                            barRods: [BarChartRodData(toY: 500000, color: kGreen)],
+                            barRods: [
+                              BarChartRodData(toY: 500000, color: kGreen)
+                            ],
                           ),
                           BarChartGroupData(
                             x: 4,
-                            barRods: [BarChartRodData(toY: 450000, color: kGreen)],
+                            barRods: [
+                              BarChartRodData(toY: 450000, color: kGreen)
+                            ],
                           ),
                           BarChartGroupData(
                             x: 5,
-                            barRods: [BarChartRodData(toY: 600000, color: kGreen)],
+                            barRods: [
+                              BarChartRodData(toY: 600000, color: kGreen)
+                            ],
                           ),
                           BarChartGroupData(
                             x: 6,
-                            barRods: [BarChartRodData(toY: 550000, color: kGreen)],
+                            barRods: [
+                              BarChartRodData(toY: 550000, color: kGreen)
+                            ],
                           ),
                         ],
                       ),
@@ -944,7 +966,8 @@ class SalesReportTab extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: _buildStatCard('Rata-rata Order', 'Rp 55.555', Colors.blue),
+                child:
+                    _buildStatCard('Rata-rata Order', 'Rp 55.555', Colors.blue),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -1081,13 +1104,16 @@ class ProfileTab extends StatefulWidget {
 }
 
 class _ProfileTabState extends State<ProfileTab> {
-  final _storeNameController = TextEditingController(text: 'Toko Elok Mekar Sari');
+  final _storeNameController =
+      TextEditingController(text: 'Toko Elok Mekar Sari');
   final _descriptionController = TextEditingController(
     text: 'Menjual produk lokal berkualitas dari Jawa Timur',
   );
   final _phoneController = TextEditingController(text: '08123456789');
-  final _emailController = TextEditingController(text: 'toko@elokmekarsari.com');
-  final _addressController = TextEditingController(text: 'Jl. Merdeka 123, Surabaya');
+  final _emailController =
+      TextEditingController(text: 'toko@elokmekarsari.com');
+  final _addressController =
+      TextEditingController(text: 'Jl. Merdeka 123, Surabaya');
 
   bool _isEditing = false;
 
@@ -1138,7 +1164,8 @@ class _ProfileTabState extends State<ProfileTab> {
                   backgroundColor: kGreen,
                   onPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Fitur ubah foto sedang dikembangkan')),
+                      const SnackBar(
+                          content: Text('Fitur ubah foto sedang dikembangkan')),
                     );
                   },
                   child: const Icon(Icons.camera_alt),
@@ -1265,7 +1292,8 @@ class _ProfileTabState extends State<ProfileTab> {
                             (route) => false,
                           );
                         },
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red),
                         child: const Text('Logout'),
                       ),
                     ],
@@ -1339,7 +1367,8 @@ class _ProfileTabState extends State<ProfileTab> {
             ),
             filled: !enabled,
             fillColor: !enabled ? kBg : Colors.white,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           ),
         ),
       ],
@@ -1359,9 +1388,7 @@ class _ProfileTabState extends State<ProfileTab> {
 
 // ========== ADD PRODUCT DIALOG ==========
 class AddProductDialog extends StatefulWidget {
-  final Function(Map<String, dynamic>) onAdd;
-
-  const AddProductDialog({Key? key, required this.onAdd}) : super(key: key);
+  const AddProductDialog({Key? key}) : super(key: key);
 
   @override
   State<AddProductDialog> createState() => _AddProductDialogState();
@@ -1390,7 +1417,13 @@ class _AddProductDialogState extends State<AddProductDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      backgroundColor: Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      clipBehavior: Clip.antiAlias,
       title: const Text('Tambah Produk Baru'),
+      actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1406,12 +1439,24 @@ class _AddProductDialogState extends State<AddProductDialog> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: _imageFile != null
-                    ? Image.file(_imageFile!, fit: BoxFit.cover)
-                    : const Icon(Icons.add_photo_alternate, size: 40, color: kGray),
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.file(
+                          _imageFile!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Icon(Icons.broken_image,
+                                size: 40, color: kGray);
+                          },
+                        ),
+                      )
+                    : const Icon(Icons.add_photo_alternate,
+                        size: 40, color: kGray),
               ),
             ),
             const SizedBox(height: 8),
-            const Text('Tap untuk pilih gambar produk', style: TextStyle(color: kGray, fontSize: 12)),
+            const Text('Tap untuk pilih gambar produk',
+                style: TextStyle(color: kGray, fontSize: 12)),
             const SizedBox(height: 16),
             TextField(
               controller: _nameController,
@@ -1457,22 +1502,20 @@ class _AddProductDialogState extends State<AddProductDialog> {
               return;
             }
 
-            widget.onAdd({
+            final newProduct = {
               'id': DateTime.now().toString(),
               'name': _nameController.text,
               'price': int.parse(_priceController.text),
-              'stock': int.parse(_stockController.text),
+              'stock': int.parse(
+                  _stockController.text.isEmpty ? '0' : _stockController.text),
               'category': _categoryController.text,
               'description': _descriptionController.text,
               'active': true,
               'image': _imageFile?.path ?? _selectedImage,
               'isFile': _imageFile != null,
-            });
+            };
 
-            Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Produk berhasil ditambahkan')),
-            );
+            Navigator.pop(context, newProduct);
           },
           style: ElevatedButton.styleFrom(backgroundColor: kGreen),
           child: const Text('Tambah'),
@@ -1513,78 +1556,109 @@ class _EditProductDialogState extends State<EditProductDialog> {
   late TextEditingController _categoryController;
   late TextEditingController _descriptionController;
   File? _imageFile;
+  Uint8List? _imageBytes;
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.product['name']);
-    _priceController = TextEditingController(text: widget.product['price'].toString());
-    _categoryController = TextEditingController(text: widget.product['category']);
-    _descriptionController = TextEditingController(text: widget.product['description']);
+    _priceController =
+        TextEditingController(text: widget.product['price'].toString());
+    _categoryController =
+        TextEditingController(text: widget.product['category']);
+    _descriptionController =
+        TextEditingController(text: widget.product['description']);
     if (widget.product['isFile'] == true) {
-      _imageFile = File(widget.product['image']);
-    }
-  }
-
-  Future<void> _pickImage() async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-
-    if (pickedFile != null) {
-      setState(() {
-        _imageFile = File(pickedFile.path);
-      });
+      final imageFile = File(widget.product['image']);
+      if (imageFile.existsSync()) {
+        _imageFile = imageFile;
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      backgroundColor: Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      clipBehavior: Clip.antiAlias,
       title: const Text('Edit Produk'),
+      actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             // Image Picker
             GestureDetector(
-              onTap: _pickImage,
+              onTap: () async {
+                final picker = ImagePicker();
+                final pickedFile =
+                    await picker.pickImage(source: ImageSource.gallery);
+                if (pickedFile != null) {
+                  final bytes = await pickedFile.readAsBytes();
+                  setState(() {
+                    _imageFile = File(pickedFile.path);
+                    _imageBytes = bytes;
+                  });
+                }
+              },
               child: Container(
-                height: 100,
-                width: 100,
+                height: 120,
+                width: 120,
                 decoration: BoxDecoration(
                   border: Border.all(color: kBorder),
                   borderRadius: BorderRadius.circular(8),
+                  color: kBg,
                 ),
-                child: _imageFile != null
-                    ? Image.file(_imageFile!, fit: BoxFit.cover)
-                    : (widget.product['isFile'] == true
-                        ? Image.file(File(widget.product['image']), fit: BoxFit.cover)
-                        : Text(widget.product['image'], style: const TextStyle(fontSize: 40))),
+                child: _buildImagePreview(),
               ),
             ),
-            const SizedBox(height: 8),
-            const Text('Tap untuk pilih gambar produk', style: TextStyle(color: kGray, fontSize: 12)),
+            const SizedBox(height: 12),
+            const Text('Tap untuk pilih gambar',
+                style: TextStyle(color: kGray, fontSize: 11)),
             const SizedBox(height: 16),
             TextField(
               controller: _nameController,
-              decoration: const InputDecoration(labelText: 'Nama Produk'),
+              decoration: const InputDecoration(
+                labelText: 'Nama Produk',
+                border: OutlineInputBorder(),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             TextField(
               controller: _priceController,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Harga'),
+              decoration: const InputDecoration(
+                labelText: 'Harga',
+                border: OutlineInputBorder(),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             TextField(
               controller: _categoryController,
-              decoration: const InputDecoration(labelText: 'Kategori'),
+              decoration: const InputDecoration(
+                labelText: 'Kategori',
+                border: OutlineInputBorder(),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             TextField(
               controller: _descriptionController,
               maxLines: 2,
-              decoration: const InputDecoration(labelText: 'Deskripsi'),
+              decoration: const InputDecoration(
+                labelText: 'Deskripsi',
+                border: OutlineInputBorder(),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
             ),
           ],
         ),
@@ -1596,25 +1670,92 @@ class _EditProductDialogState extends State<EditProductDialog> {
         ),
         ElevatedButton(
           onPressed: () {
-            widget.product['name'] = _nameController.text;
-            widget.product['price'] = int.parse(_priceController.text);
-            widget.product['category'] = _categoryController.text;
-            widget.product['description'] = _descriptionController.text;
-            if (_imageFile != null) {
-              widget.product['image'] = _imageFile!.path;
-              widget.product['isFile'] = true;
+            try {
+              widget.product['name'] = _nameController.text;
+              widget.product['price'] = int.parse(_priceController.text);
+              widget.product['category'] = _categoryController.text;
+              widget.product['description'] = _descriptionController.text;
+              if (_imageFile != null) {
+                widget.product['image'] = _imageFile!.path;
+                widget.product['isFile'] = true;
+              }
+              widget.onSave(widget.product);
+              Navigator.pop(context);
+            } catch (e) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Error: ${e.toString()}')),
+              );
             }
-
-            widget.onSave(widget.product);
-            Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Produk berhasil diperbarui')),
-            );
           },
           style: ElevatedButton.styleFrom(backgroundColor: kGreen),
           child: const Text('Simpan'),
         ),
       ],
+    );
+  }
+
+  Widget _buildImagePreview() {
+    // Check if new image was picked
+    if (_imageBytes != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.memory(
+          _imageBytes!,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return Center(
+              child: Icon(Icons.broken_image, size: 50, color: kGray),
+            );
+          },
+        ),
+      );
+    }
+    if (_imageFile != null) {
+      if (_imageFile!.existsSync()) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.file(
+            _imageFile!,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return Center(
+                child: Icon(Icons.broken_image, size: 50, color: kGray),
+              );
+            },
+          ),
+        );
+      } else {
+        return Center(
+          child: Icon(Icons.error, size: 50, color: Colors.red),
+        );
+      }
+    }
+
+    // Check if existing image is a file
+    if (widget.product['isFile'] == true && widget.product['image'] != null) {
+      final imageFile = File(widget.product['image']);
+      if (imageFile.existsSync()) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.file(
+            imageFile,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return Center(
+                child: Icon(Icons.broken_image, size: 50, color: kGray),
+              );
+            },
+          ),
+        );
+      }
+    }
+
+    // Fallback to emoji
+    return Center(
+      child: Text(
+        widget.product['image'] ?? '📦',
+        style: const TextStyle(fontSize: 60),
+      ),
     );
   }
 

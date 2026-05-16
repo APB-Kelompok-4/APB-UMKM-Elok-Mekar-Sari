@@ -1,8 +1,12 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import 'Chatbot.dart' as chatbot;
+import 'services/product_service.dart';
 
 // bagian warna
 const kGreen = Color(0xFF2D5A27);
@@ -88,7 +92,7 @@ class Product {
   final String name;
   final String description;
   final double price;
-  final String imageUrl;
+  final dynamic imageUrl;
   final String category;
   final int stock;
   final double rating;
@@ -148,78 +152,26 @@ class MarketplacePage extends StatefulWidget {
 
 class _MarketplacePageState extends State<MarketplacePage> {
   String selectedCategory = 'Semua';
-  final List<String> categories = ['Semua', 'Makanan', 'Minuman', 'Camilan'];
+  final List<String> categories = ['Semua', 'Makanan', 'Minuman', 'Snack'];
 
-  // Sample data produk UMKM
-  final List<Product> allProducts = [
-    Product(
-      id: 'UMKM-001',
-      name: 'Nugget Lele',
-      description: 'Nugget ikan lele gurih dengan rempah khas UMKM lokal.',
-      price: 25000,
-      imageUrl: 'assets/nugget_lele.jpeg',
-      category: 'Makanan',
-      stock: 120,
-      rating: 4.7,
-      reviews: 210,
-    ),
-    Product(
-      id: 'UMKM-002',
-      name: 'Sempol Jamur',
-      description: 'Sempol batagor jamur crispy dengan saus pedas manis.',
-      price: 18000,
-      imageUrl: 'assets/sempol_jamur.jpg',
-      category: 'Makanan',
-      stock: 95,
-      rating: 4.6,
-      reviews: 180,
-    ),
-    Product(
-      id: 'UMKM-003',
-      name: 'Tahu Walik',
-      description: 'Tahu walik renyah isi daging ayam jamur yang legit.',
-      price: 11000,
-      imageUrl: 'assets/tahu_walik.jpeg',
-      category: 'Makanan',
-      stock: 75,
-      rating: 4.5,
-      reviews: 165,
-    ),
-    Product(
-      id: 'UMKM-004',
-      name: 'Jangkrik Krispi',
-      description: 'Camilan protein tinggi dari jangkrik goreng renyah.',
-      price: 22000,
-      imageUrl: 'assets/jangkrik_krispi.jpg',
-      category: 'Camilan',
-      stock: 55,
-      rating: 4.4,
-      reviews: 89,
-    ),
-    Product(
-      id: 'UMKM-005',
-      name: 'Jamu Sinom Jamur Tiram',
-      description: 'Jamu Sinom sehat dengan ekstrak jamur tiram dan jahe.',
-      price: 15000,
-      imageUrl: 'assets/jamu_sinom.jpg',
-      category: 'Minuman',
-      stock: 80,
-      rating: 4.8,
-      reviews: 205,
-    ),
-    Product(
-      id: 'UMKM-006',
-      name: 'Sate Jamur & Abon Lele',
-      description:
-          'Sate jamur lezat dipadu abon lele gurih untuk cemilan sehat.',
-      price: 29000,
-      imageUrl: 'assets/sate_jamur_abon_lele.jpg',
-      category: 'Makanan',
-      stock: 60,
-      rating: 4.7,
-      reviews: 135,
-    ),
-  ];
+  // Convert ProductService data to Product model
+  List<Product> _getProductsFromService() {
+    return ProductService.getActiveProducts().map((p) {
+      return Product(
+        id: p['id'] ?? 'PROD-${p['name']}',
+        name: p['name'] ?? 'Produk',
+        description: p['description'] ?? '',
+        price: (p['price'] ?? 0).toDouble(),
+        imageUrl: p['image'] ?? '📦',
+        category: p['category'] ?? 'Lainnya',
+        stock: p['stock'] ?? 0,
+        rating: 4.5,
+        reviews: 0,
+      );
+    }).toList();
+  }
+
+  List<Product> get allProducts => _getProductsFromService();
 
   List<Product> get filteredProducts {
     if (selectedCategory == 'Semua') {
@@ -338,18 +290,41 @@ class _MarketplacePageState extends State<MarketplacePage> {
 
           // Product grid
           Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.all(12),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                childAspectRatio: 0.72,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-              ),
-              itemCount: filteredProducts.length,
-              itemBuilder: (context, index) {
-                final product = filteredProducts[index];
-                return ProductCard(product: product);
+            child: ValueListenableBuilder<List<Map<String, dynamic>>>(
+              valueListenable: ProductService.productsNotifier,
+              builder: (context, productList, child) {
+                final allProducts = productList.map((p) {
+                  return Product(
+                    id: p['id'] ?? 'PROD-${p['name']}',
+                    name: p['name'] ?? 'Produk',
+                    description: p['description'] ?? '',
+                    price: (p['price'] ?? 0).toDouble(),
+                    imageUrl: p['image'] ?? '📦',
+                    category: p['category'] ?? 'Lainnya',
+                    stock: p['stock'] ?? 0,
+                    rating: 4.5,
+                    reviews: 0,
+                  );
+                }).toList();
+
+                final shownProducts = selectedCategory == 'Semua'
+                    ? allProducts
+                    : allProducts.where((p) => p.category == selectedCategory).toList();
+
+                return GridView.builder(
+                  padding: const EdgeInsets.all(12),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    childAspectRatio: 0.72,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                  ),
+                  itemCount: shownProducts.length,
+                  itemBuilder: (context, index) {
+                    final product = shownProducts[index];
+                    return ProductCard(product: product);
+                  },
+                );
               },
             ),
           ),
@@ -401,7 +376,38 @@ class ProductCard extends StatelessWidget {
                       top: Radius.circular(12),
                     ),
                   ),
-                  child: Icon(Icons.image, size: 50, color: kGray),
+                  child: Center(
+                    child: () {
+                      final img = product.imageUrl;
+                      if (img is Uint8List && img.isNotEmpty) {
+                        return Image.memory(
+                          img,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image, size: 50, color: kGray),
+                        );
+                      } else if (img is String && (img.contains('/') || img.contains('\\'))) {
+                        final file = File(img);
+                        if (file.existsSync()) {
+                          return Image.file(
+                            file,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image, size: 50, color: kGray),
+                          );
+                        }
+                      } else if (img is String && (img.startsWith('http://') || img.startsWith('https://'))) {
+                        return Image.network(
+                          img,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image, size: 50, color: kGray),
+                        );
+                      }
+                      // Fallback: jika bukan Uint8List dan bukan String, atau String tapi bukan path/gambar
+                      return Text(
+                        img?.toString() ?? '📦',
+                        style: const TextStyle(fontSize: 40),
+                      );
+                    }(),
+                  ),
                 ),
                 Positioned(
                   top: 8,
@@ -1444,7 +1450,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 ),
                 const SizedBox(height: 20),
 
-                // ===== PAYMENT METHOD =====
+                //  ===== PAYMENT METHOD =====
                 _buildSectionHeader('💳 Metode Pembayaran'),
                 const SizedBox(height: 12),
                 Column(
@@ -1459,7 +1465,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           width: _selectedPaymentMethod == method['id'] ? 2 : 1,
                         ),
                         borderRadius: BorderRadius.circular(10),
-                        color: _selectedPaymentMethod == method['id']
+                        color: _selectedPaymentMethod == method['id'] 
                             ? kGreenPale
                             : Colors.white,
                       ),

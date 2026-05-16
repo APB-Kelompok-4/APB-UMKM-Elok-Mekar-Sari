@@ -1,10 +1,12 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:image_picker/image_picker.dart';
 import 'models/complaint.dart';
 import 'services/complaint_service.dart';
+import 'services/product_service.dart';
 
 const kGreen = Color(0xFF2D5A27);
 const kGreenLight = Color(0xFF4A8C3F);
@@ -41,13 +43,68 @@ class _AdminPageState extends State<AdminPage> {
     });
   }
 
+  String _getAppBarTitle() {
+    switch (_selectedIndex) {
+      case 0:
+        return 'Dashboard Admin';
+      case 1:
+        return 'Manajemen Produk';
+      case 2:
+        return 'Manajemen Order';
+      case 3:
+        return 'Manajemen Keluhan';
+      case 4:
+        return 'Pengguna';
+      case 5:
+        return 'Laporan';
+      default:
+        return 'Admin Panel';
+    }
+  }
+
+  List<Widget> _getAppBarActions() {
+    if (_selectedIndex == 1) {
+      return [
+        IconButton(
+          onPressed: _addProductFromAppBar,
+          icon: const Icon(Icons.add),
+          tooltip: 'Tambah Produk',
+        ),
+      ];
+    }
+    if (_selectedIndex == 5) {
+      return [
+        IconButton(
+          onPressed: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Fitur ekspor laporan tersedia di tampilan laporan')),
+            );
+          },
+          icon: const Icon(Icons.download),
+          tooltip: 'Ekspor Laporan',
+        ),
+      ];
+    }
+    return [];
+  }
+
+  void _addProductFromAppBar() {
+    // Move to product tab and then open tambah produk modal via a callback in the product tab state.
+    if (_selectedIndex == 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gunakan tombol Tambah Produk di tab produk untuk menambahkan.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Admin Panel'),
+        title: Text(_getAppBarTitle()),
         backgroundColor: kGreen,
         elevation: 0,
+        actions: _getAppBarActions(),
       ),
       body: _widgetOptions.elementAt(_selectedIndex),
       bottomNavigationBar: BottomNavigationBar(
@@ -56,10 +113,7 @@ class _AdminPageState extends State<AdminPage> {
             icon: Icon(Icons.dashboard),
             label: 'Dashboard',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.inventory),
-            label: 'Produk',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.inventory), label: 'Produk'),
           BottomNavigationBarItem(
             icon: Icon(Icons.shopping_cart),
             label: 'Order',
@@ -68,10 +122,7 @@ class _AdminPageState extends State<AdminPage> {
             icon: Icon(Icons.report_problem),
             label: 'Keluhan',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.people),
-            label: 'Pengguna',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Pengguna'),
           BottomNavigationBarItem(
             icon: Icon(Icons.bar_chart),
             label: 'Laporan',
@@ -144,7 +195,7 @@ class DashboardTab extends StatelessWidget {
               Expanded(
                 child: _buildSummaryCard(
                   'Produk Terlaris',
-                  'Keripik Tempe Original',
+                  'Nugget Lele',
                   Icons.star,
                   Colors.amber,
                 ),
@@ -185,20 +236,45 @@ class DashboardTab extends StatelessWidget {
   }
 
   int _getPendingComplaintCount() {
+    final umkmProducts = _getUMKMProducts();
     return ComplaintService.complaints.where((complaint) {
-      return complaint.status == ComplaintStatus.submitted ||
+      final isPending =
+          complaint.status == ComplaintStatus.submitted ||
           complaint.status == ComplaintStatus.inProgress ||
           complaint.status == ComplaintStatus.reviewed ||
           complaint.status == ComplaintStatus.waitingCustomer;
+      // Filter hanya keluhan dari produk UMKM yang ada
+      final isUMKMProduct =
+          complaint.productName != null &&
+          umkmProducts.contains(complaint.productName);
+      return isPending && isUMKMProduct;
     }).length;
   }
 
+  List<String> _getUMKMProducts() {
+    return [
+      'Nugget Lele',
+      'Sempol Jamur',
+      'Tahu Walik',
+      'Jangkrik Krispi',
+      'Sinom',
+      'Sate Jamur',
+    ];
+  }
+
   List<Complaint> _getPendingComplaints() {
+    final umkmProducts = _getUMKMProducts();
     return ComplaintService.complaints.where((complaint) {
-      return complaint.status == ComplaintStatus.submitted ||
+      final isPending =
+          complaint.status == ComplaintStatus.submitted ||
           complaint.status == ComplaintStatus.inProgress ||
           complaint.status == ComplaintStatus.reviewed ||
           complaint.status == ComplaintStatus.waitingCustomer;
+      // Filter hanya keluhan dari produk UMKM yang ada
+      final isUMKMProduct =
+          complaint.productName != null &&
+          umkmProducts.contains(complaint.productName);
+      return isPending && isUMKMProduct;
     }).toList();
   }
 
@@ -215,12 +291,15 @@ class DashboardTab extends StatelessWidget {
     }
   }
 
-  Widget _buildSummaryCard(String title, String value, IconData icon, Color color) {
+  Widget _buildSummaryCard(
+    String title,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return Card(
       elevation: 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -239,10 +318,7 @@ class DashboardTab extends StatelessWidget {
             Text(
               title,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                color: kGray,
-              ),
+              style: TextStyle(fontSize: 12, color: kGray),
             ),
           ],
         ),
@@ -252,9 +328,24 @@ class DashboardTab extends StatelessWidget {
 
   Widget _buildRecentOrdersList() {
     final orders = [
-      {'id': '001', 'customer': 'John Doe', 'status': 'Dikemas', 'total': 'Rp 50.000'},
-      {'id': '002', 'customer': 'Jane Smith', 'status': 'Dikirim', 'total': 'Rp 75.000'},
-      {'id': '003', 'customer': 'Bob Johnson', 'status': 'Selesai', 'total': 'Rp 30.000'},
+      {
+        'id': '001',
+        'customer': 'John Doe',
+        'status': 'Dikemas',
+        'total': 'Rp 50.000',
+      },
+      {
+        'id': '002',
+        'customer': 'Jane Smith',
+        'status': 'Dikirim',
+        'total': 'Rp 75.000',
+      },
+      {
+        'id': '003',
+        'customer': 'Bob Johnson',
+        'status': 'Selesai',
+        'total': 'Rp 30.000',
+      },
     ];
 
     return ListView.builder(
@@ -307,12 +398,16 @@ class DashboardTab extends StatelessWidget {
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
           child: ListTile(
-            title: Text('Keluhan #${complaint.id} - ${complaint.productName ?? complaint.subject}'),
+            title: Text(
+              'Keluhan #${complaint.id} - ${complaint.productName ?? complaint.subject}',
+            ),
             subtitle: Text('Dari: ${complaint.customerName}'),
             trailing: Text(
               _priorityToString(complaint.priority),
               style: TextStyle(
-                color: complaint.priority == ComplaintPriority.high || complaint.priority == ComplaintPriority.urgent
+                color:
+                    complaint.priority == ComplaintPriority.high ||
+                        complaint.priority == ComplaintPriority.urgent
                     ? Colors.red
                     : Colors.orange,
                 fontWeight: FontWeight.bold,
@@ -347,82 +442,39 @@ class ProductManagementTab extends StatefulWidget {
 }
 
 class _ProductManagementTabState extends State<ProductManagementTab> {
-  final List<Map<String, dynamic>> _products = [
-    {
-      'id': '1',
-      'name': 'Nugget Lele',
-      'price': 25000,
-      'stock': 50,
-      'category': 'Makanan',
-      'active': true,
-      'image': '🍗',
-      'description': 'Nugget lele olahan ikan lele tanpa pengawet'
-    },
-    {
-      'id': '2',
-      'name': 'Sempol Jamur',
-      'price': 22000,
-      'stock': 45,
-      'category': 'Makanan',
-      'active': true,
-      'image': '🍄',
-      'description': 'Sempol jamur tiram renyah dan gurih'
-    },
-    {
-      'id': '3',
-      'name': 'Tahu Walik',
-      'price': 20000,
-      'stock': 40,
-      'category': 'Makanan',
-      'active': true,
-      'image': '🥟',
-      'description': 'Tahu walik isi sayuran dan daging lezat'
-    },
-    {
-      'id': '4',
-      'name': 'Jangkrik Krispi',
-      'price': 18000,
-      'stock': 35,
-      'category': 'Makanan',
-      'active': true,
-      'image': '🦗',
-      'description': 'Jangkrik krispi gurih, cemilan unik khas UMKM'
-    },
-    {
-      'id': '5',
-      'name': 'Sinom',
-      'price': 15000,
-      'stock': 30,
-      'category': 'Minuman',
-      'active': true,
-      'image': '🥤',
-      'description': 'Minuman sinom tradisional segar dengan rempah'
-    },
-    {
-      'id': '6',
-      'name': 'Sate Jamur',
-      'price': 27000,
-      'stock': 25,
-      'category': 'Makanan',
-      'active': true,
-      'image': '🍢',
-      'description': 'Sate jamur dengan bumbu panggang khas UMKM'
-    },
-  ];
+  List<Map<String, dynamic>> get _products => ProductService.products;
 
   void _toggleProductStatus(int index) {
-    setState(() {
-      _products[index]['active'] = !_products[index]['active'];
-    });
+    final updatedProduct = Map<String, dynamic>.from(_products[index]);
+    updatedProduct['active'] = !(updatedProduct['active'] as bool);
+    ProductService.updateProduct(index, updatedProduct);
+    setState(() {});
   }
 
   void _deleteProduct(int index) {
-    setState(() {
-      _products.removeAt(index);
-    });
+    ProductService.deleteProduct(index);
+    setState(() {});
   }
 
   Widget _buildProductImageWidget(dynamic imageValue) {
+    if (imageValue is Uint8List && imageValue.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.memory(
+          imageValue,
+          width: 48,
+          height: 48,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => Container(
+            width: 48,
+            height: 48,
+            color: kBg,
+            child: const Icon(Icons.broken_image, size: 20, color: Colors.red),
+          ),
+        ),
+      );
+    }
+
     if (imageValue is String) {
       final imageFile = File(imageValue);
       if (imageFile.existsSync()) {
@@ -433,21 +485,117 @@ class _ProductManagementTabState extends State<ProductManagementTab> {
             width: 48,
             height: 48,
             fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => Container(
+              width: 48,
+              height: 48,
+              color: kBg,
+              child: const Icon(Icons.broken_image, size: 20, color: Colors.red),
+            ),
           ),
         );
       }
     }
+
     return Text(
       imageValue?.toString() ?? '📦',
       style: const TextStyle(fontSize: 32),
     );
   }
 
-  Future<String?> _pickImage() async {
+  Future<XFile?> _pickImage() async {
     final ImagePicker picker = ImagePicker();
-    final XFile? pickedFile = await picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile == null) return null;
-    return pickedFile.path;
+    try {
+      final XFile? pickedFile = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+      );
+      return pickedFile;
+    } catch (error, stackTrace) {
+      debugPrint('Image pick failed: $error');
+      debugPrint('$stackTrace');
+      return null;
+    }
+  }
+
+  Widget _buildSelectedImagePreview(
+    String? selectedImagePath,
+    Uint8List? selectedImageBytes,
+  ) {
+    return Builder(
+      builder: (context) {
+        try {
+          if (selectedImageBytes != null && selectedImageBytes.isNotEmpty) {
+            return Image.memory(
+              selectedImageBytes,
+              height: 100,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  height: 100,
+                  width: double.infinity,
+                  color: kBg,
+                  child: const Center(
+                    child: Icon(
+                      Icons.broken_image,
+                      size: 36,
+                      color: Colors.red,
+                    ),
+                  ),
+                );
+              },
+            );
+          }
+
+          if (selectedImagePath == null || selectedImagePath.isEmpty) {
+            return Container(
+              height: 100,
+              width: double.infinity,
+              color: kBg,
+              child: const Center(child: Text('Belum memilih gambar')),
+            );
+          }
+
+          final imageFile = File(selectedImagePath);
+          if (!imageFile.existsSync()) {
+            return Container(
+              height: 100,
+              width: double.infinity,
+              color: kBg,
+              child: const Center(child: Text('Gambar tidak ditemukan')),
+            );
+          }
+
+          return Image.file(
+            imageFile,
+            height: 100,
+            width: double.infinity,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return Container(
+                height: 100,
+                width: double.infinity,
+                color: kBg,
+                child: const Center(
+                  child: Icon(Icons.broken_image, size: 36, color: Colors.red),
+                ),
+              );
+            },
+          );
+        } catch (error, stackTrace) {
+          debugPrint('Image preview failed: $error');
+          debugPrint('$stackTrace');
+          return Container(
+            height: 100,
+            width: double.infinity,
+            color: kBg,
+            child: const Center(
+              child: Icon(Icons.error, size: 36, color: Colors.red),
+            ),
+          );
+        }
+      },
+    );
   }
 
   void _addProduct() {
@@ -455,10 +603,11 @@ class _ProductManagementTabState extends State<ProductManagementTab> {
     final TextEditingController priceController = TextEditingController();
     final TextEditingController stockController = TextEditingController();
     final TextEditingController descriptionController = TextEditingController();
+    final TextEditingController categoryController =
+        TextEditingController(text: 'Makanan');
     String selectedCategory = 'Makanan';
     String? selectedImagePath;
-
-    final List<String> categories = ['Makanan', 'Minuman'];
+    Uint8List? selectedImageBytes;
 
     showModalBottomSheet(
       context: context,
@@ -522,60 +671,59 @@ class _ProductManagementTabState extends State<ProductManagementTab> {
                     keyboardType: TextInputType.number,
                   ),
                   const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    initialValue: selectedCategory,
-                    items: categories.map((category) {
-                      return DropdownMenuItem(
-                        value: category,
-                        child: Text(category),
-                      );
-                    }).toList(),
-                    onChanged: (value) => setState(() => selectedCategory = value!),
+                  TextField(
+                    controller: categoryController,
+                    onChanged: (value) => setState(() {
+                      selectedCategory = value;
+                    }),
                     decoration: const InputDecoration(
                       labelText: 'Kategori',
                       border: OutlineInputBorder(),
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text('Upload Gambar Produk', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text(
+                    'Upload Gambar Produk',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: selectedImagePath == null
-                            ? Container(
-                                height: 100,
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: kBorder),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Center(
-                                  child: Text('Belum memilih gambar'),
-                                ),
-                              )
-                            : ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.file(
-                                  File(selectedImagePath!),
-                                  height: 100,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
+                  GestureDetector(
+                    onTap: () async {
+                      final pickedFile = await _pickImage();
+                      if (pickedFile != null) {
+                        try {
+                          final bytes = await pickedFile.readAsBytes();
+                          setState(() {
+                            selectedImagePath = pickedFile.path;
+                            selectedImageBytes = bytes.isNotEmpty ? bytes : null;
+                          });
+                        } catch (error, stackTrace) {
+                          debugPrint('Read image bytes failed: $error');
+                          debugPrint('$stackTrace');
+                          setState(() {
+                            selectedImagePath = pickedFile.path;
+                            selectedImageBytes = null;
+                          });
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Gagal memproses gambar. Coba lagi.'),
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    child: Container(
+                      height: 100,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: kBorder),
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      const SizedBox(width: 12),
-                      ElevatedButton.icon(
-                        onPressed: () async {
-                          final path = await _pickImage();
-                          if (path != null) {
-                            setState(() => selectedImagePath = path);
-                          }
-                        },
-                        icon: const Icon(Icons.upload_file),
-                        label: const Text('Pilih'),
-                        style: ElevatedButton.styleFrom(backgroundColor: kGreen),
+                      child: _buildSelectedImagePreview(
+                        selectedImagePath,
+                        selectedImageBytes,
                       ),
-                    ],
+                    ),
                   ),
                   const SizedBox(height: 16),
                   TextField(
@@ -603,29 +751,36 @@ class _ProductManagementTabState extends State<ProductManagementTab> {
                                 priceController.text.isNotEmpty &&
                                 stockController.text.isNotEmpty &&
                                 descriptionController.text.isNotEmpty) {
-                              setState(() {
-                                _products.add({
-                                  'id': (_products.length + 1).toString(),
-                                  'name': nameController.text,
-                                  'price': int.parse(priceController.text),
-                                  'stock': int.parse(stockController.text),
-                                  'category': selectedCategory,
-                                  'active': true,
-                                  'image': selectedImagePath ?? '📦',
-                                  'description': descriptionController.text,
-                                });
+                              ProductService.addProduct({
+                                'id': DateTime.now().millisecondsSinceEpoch
+                                    .toString(),
+                                'name': nameController.text,
+                                'price': int.parse(priceController.text),
+                                'stock': int.parse(stockController.text),
+                                'category': selectedCategory,
+                                'active': true,
+                                'image': selectedImageBytes ?? selectedImagePath ?? '📦',
+                                'description': descriptionController.text,
+                                'isFile': selectedImagePath != null,
                               });
+                              setState(() {});
                               Navigator.pop(context);
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Produk berhasil ditambahkan')),
+                                const SnackBar(
+                                  content: Text('Produk berhasil ditambahkan'),
+                                ),
                               );
                             } else {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Harap isi semua field')),
+                                const SnackBar(
+                                  content: Text('Harap isi semua field'),
+                                ),
                               );
                             }
                           },
-                          style: ElevatedButton.styleFrom(backgroundColor: kGreen),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: kGreen,
+                          ),
                           child: const Text('Tambah'),
                         ),
                       ),
@@ -643,156 +798,185 @@ class _ProductManagementTabState extends State<ProductManagementTab> {
 
   void _editProduct(int index) {
     final product = _products[index];
-    final TextEditingController nameController = TextEditingController(text: product['name']);
-    final TextEditingController priceController = TextEditingController(text: product['price'].toString());
-    final TextEditingController stockController = TextEditingController(text: product['stock'].toString());
-    final TextEditingController descriptionController = TextEditingController(text: product['description']);
+    final TextEditingController nameController = TextEditingController(
+      text: product['name'],
+    );
+    final TextEditingController priceController = TextEditingController(
+      text: product['price'].toString(),
+    );
+    final TextEditingController stockController = TextEditingController(
+      text: product['stock'].toString(),
+    );
+    final TextEditingController descriptionController = TextEditingController(
+      text: product['description'],
+    );
+    final TextEditingController categoryController =
+        TextEditingController(text: product['category']);
     String selectedCategory = product['category'];
-    String? selectedImagePath = product['image'] is String && File(product['image']).existsSync()
-        ? product['image']
-        : null;
+    String? selectedImagePath;
+    Uint8List? selectedImageBytes;
 
-    final List<String> categories = ['Makanan', 'Minuman'];
+    if (product['image'] is Uint8List) {
+      selectedImageBytes = product['image'];
+    } else if (product['image'] is String && File(product['image']).existsSync()) {
+      selectedImagePath = product['image'];
+    }
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Edit Produk'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Nama Produk',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: priceController,
-                  decoration: const InputDecoration(
-                    labelText: 'Harga (Rp)',
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.number,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: stockController,
-                  decoration: const InputDecoration(
-                    labelText: 'Stok',
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.number,
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  initialValue: selectedCategory,
-                  items: categories.map((category) {
-                    return DropdownMenuItem(
-                      value: category,
-                      child: Text(category),
-                    );
-                  }).toList(),
-                  onChanged: (value) => setState(() => selectedCategory = value!),
-                  decoration: const InputDecoration(
-                    labelText: 'Kategori',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text('Upload Gambar Produk', style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Row(
+        builder: (context, setState) {
+          return AlertDialog(
+            backgroundColor: Colors.white,
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 24,
+              vertical: 24,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            scrollable: true,
+            title: const Text('Edit Produk'),
+            content: SizedBox(
+              width: MediaQuery.of(context).size.width * 0.8,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(
-                      child: selectedImagePath == null
-                          ? Container(
-                              height: 100,
-                              decoration: BoxDecoration(
-                                border: Border.all(color: kBorder),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Center(
-                                child: Text('Belum memilih gambar'),
-                              ),
-                            )
-                          : ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.file(
-                                File(selectedImagePath!),
-                                height: 100,
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Nama Produk',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
-                    const SizedBox(width: 12),
-                    ElevatedButton.icon(
-                      onPressed: () async {
-                        final path = await _pickImage();
-                        if (path != null) {
-                          setState(() => selectedImagePath = path);
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: priceController,
+                      decoration: const InputDecoration(
+                        labelText: 'Harga (Rp)',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: stockController,
+                      decoration: const InputDecoration(
+                        labelText: 'Stok',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: categoryController,
+                      onChanged: (value) => setState(() {
+                        selectedCategory = value;
+                      }),
+                      decoration: const InputDecoration(
+                        labelText: 'Kategori',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Upload Gambar Produk',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    GestureDetector(
+                      onTap: () async {
+                        final pickedFile = await _pickImage();
+                        if (pickedFile != null) {
+                          try {
+                            final bytes = await pickedFile.readAsBytes();
+                            setState(() {
+                              selectedImagePath = pickedFile.path;
+                              selectedImageBytes = bytes.isNotEmpty ? bytes : null;
+                            });
+                          } catch (error, stackTrace) {
+                            debugPrint('Read image bytes failed: $error');
+                            debugPrint('$stackTrace');
+                            setState(() {
+                              selectedImagePath = pickedFile.path;
+                              selectedImageBytes = null;
+                            });
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Gagal memproses gambar. Coba lagi.'),
+                              ),
+                            );
+                          }
                         }
                       },
-                      icon: const Icon(Icons.upload_file),
-                      label: const Text('Pilih'),
-                      style: ElevatedButton.styleFrom(backgroundColor: kGreen),
+                      child: Container(
+                        height: 100,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: kBorder),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: _buildSelectedImagePreview(
+                          selectedImagePath,
+                          selectedImageBytes,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: descriptionController,
+                      decoration: const InputDecoration(
+                        labelText: 'Deskripsi Produk',
+                        border: OutlineInputBorder(),
+                      ),
+                      maxLines: 3,
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: descriptionController,
-                  decoration: const InputDecoration(
-                    labelText: 'Deskripsi Produk',
-                    border: OutlineInputBorder(),
-                  ),
-                  maxLines: 3,
-                ),
-              ],
+              ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Batal'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (nameController.text.isNotEmpty &&
-                    priceController.text.isNotEmpty &&
-                    stockController.text.isNotEmpty &&
-                    descriptionController.text.isNotEmpty) {
-                  setState(() {
-                    _products[index] = {
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Batal'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  if (nameController.text.isNotEmpty &&
+                      priceController.text.isNotEmpty &&
+                      stockController.text.isNotEmpty &&
+                      descriptionController.text.isNotEmpty) {
+                    final updatedProduct = {
                       ...product,
                       'name': nameController.text,
                       'price': int.parse(priceController.text),
                       'stock': int.parse(stockController.text),
                       'category': selectedCategory,
-                      'image': selectedImagePath ?? product['image'],
+                      'image': selectedImageBytes ?? selectedImagePath ?? product['image'],
                       'description': descriptionController.text,
+                      'isFile': selectedImagePath != null,
                     };
-                  });
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Produk berhasil diupdate')),
-                  );
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Harap isi semua field')),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: kGreen),
-              child: const Text('Update'),
-            ),
-          ],
-        ),
+                    ProductService.updateProduct(index, updatedProduct);
+                    setState(() {});
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Produk berhasil diupdate')),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Harap isi semua field')),
+                    );
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: kGreen,
+                ),
+                child: const Text('Update'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -857,15 +1041,37 @@ class _ProductManagementTabState extends State<ProductManagementTab> {
                           onChanged: (value) => _toggleProductStatus(index),
                           activeThumbColor: kGreen,
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.edit),
-                          onPressed: () => _editProduct(index),
-                          color: kGreen,
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete),
-                          onPressed: () => _deleteProduct(index),
-                          color: Colors.red,
+                        PopupMenuButton<String>(
+                          onSelected: (value) {
+                            if (value == 'edit') {
+                              _editProduct(index);
+                            } else if (value == 'delete') {
+                              _deleteProduct(index);
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: 'edit',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.edit, color: Colors.black),
+                                  SizedBox(width: 8),
+                                  Text('Edit Produk'),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'delete',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.delete, color: Colors.red),
+                                  SizedBox(width: 8),
+                                  Text('Hapus Produk'),
+                                ],
+                              ),
+                            ),
+                          ],
+                          icon: const Icon(Icons.more_vert, color: Colors.black),
                         ),
                       ],
                     ),
@@ -875,17 +1081,42 @@ class _ProductManagementTabState extends State<ProductManagementTab> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'Deskripsi: ${product['description']}',
-                              style: const TextStyle(fontSize: 14),
+                            const Text(
+                              'Deskripsi Produk',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             const SizedBox(height: 8),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: kCream,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: kBorder),
+                              ),
+                              child: Text(
+                                product['description']?.toString().isNotEmpty == true
+                                    ? product['description']
+                                    : 'Tidak ada deskripsi produk',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  height: 1.5,
+                                  color: kDark,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
                             Row(
                               children: [
                                 Text(
                                   'Status: ${product['active'] ? 'Aktif' : 'Tidak Aktif'}',
                                   style: TextStyle(
-                                    color: product['active'] ? Colors.green : Colors.red,
+                                    color: product['active']
+                                        ? Colors.green
+                                        : Colors.red,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -916,7 +1147,12 @@ class OrderManagementTab extends StatefulWidget {
 
 class _OrderManagementTabState extends State<OrderManagementTab> {
   String _selectedStatus = 'Semua';
-  final List<String> _statusOptions = ['Semua', 'Dikemas', 'Dikirim', 'Selesai'];
+  final List<String> _statusOptions = [
+    'Semua',
+    'Dikemas',
+    'Dikirim',
+    'Selesai',
+  ];
 
   final List<Map<String, dynamic>> _orders = [
     {
@@ -925,7 +1161,7 @@ class _OrderManagementTabState extends State<OrderManagementTab> {
       'status': 'Dikemas',
       'total': 50000,
       'date': '2024-01-15',
-      'items': ['Nasi Gudeg x2']
+      'items': ['Nasi Gudeg x2'],
     },
     {
       'id': '002',
@@ -933,7 +1169,7 @@ class _OrderManagementTabState extends State<OrderManagementTab> {
       'status': 'Dikirim',
       'total': 75000,
       'date': '2024-01-14',
-      'items': ['Keripik Tempe x3', 'Nasi Gudeg x1']
+      'items': ['Keripik Tempe x3', 'Nasi Gudeg x1'],
     },
     {
       'id': '003',
@@ -941,13 +1177,15 @@ class _OrderManagementTabState extends State<OrderManagementTab> {
       'status': 'Selesai',
       'total': 30000,
       'date': '2024-01-13',
-      'items': ['Batik Jogja x1']
+      'items': ['Batik Jogja x1'],
     },
   ];
 
   List<Map<String, dynamic>> get _filteredOrders {
     if (_selectedStatus == 'Semua') return _orders;
-    return _orders.where((order) => order['status'] == _selectedStatus).toList();
+    return _orders
+        .where((order) => order['status'] == _selectedStatus)
+        .toList();
   }
 
   void _updateOrderStatus(int index, String newStatus) {
@@ -967,10 +1205,7 @@ class _OrderManagementTabState extends State<OrderManagementTab> {
             child: DropdownButtonFormField<String>(
               initialValue: _selectedStatus,
               items: _statusOptions.map((status) {
-                return DropdownMenuItem(
-                  value: status,
-                  child: Text(status),
-                );
+                return DropdownMenuItem(value: status, child: Text(status));
               }).toList(),
               onChanged: (value) {
                 setState(() => _selectedStatus = value!);
@@ -995,7 +1230,9 @@ class _OrderManagementTabState extends State<OrderManagementTab> {
                   margin: const EdgeInsets.only(bottom: 12),
                   child: ExpansionTile(
                     title: Text('Order #${order['id']} - ${order['customer']}'),
-                    subtitle: Text('Total: Rp ${order['total']} • ${order['date']}'),
+                    subtitle: Text(
+                      'Total: Rp ${order['total']} • ${order['date']}',
+                    ),
                     trailing: Text(
                       order['status'],
                       style: TextStyle(
@@ -1015,15 +1252,22 @@ class _OrderManagementTabState extends State<OrderManagementTab> {
                             const SizedBox(height: 4),
                             Wrap(
                               spacing: 8,
-                              children: ['Dikemas', 'Dikirim', 'Selesai'].map((status) {
+                              children: ['Dikemas', 'Dikirim', 'Selesai'].map((
+                                status,
+                              ) {
                                 return ElevatedButton(
                                   onPressed: order['status'] == status
                                       ? null
                                       : () => _updateOrderStatus(
-                                          _orders.indexWhere((o) => o['id'] == order['id']),
-                                          status),
+                                          _orders.indexWhere(
+                                            (o) => o['id'] == order['id'],
+                                          ),
+                                          status,
+                                        ),
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: order['status'] == status ? kGray : kGreen,
+                                    backgroundColor: order['status'] == status
+                                        ? kGray
+                                        : kGreen,
                                   ),
                                   child: Text(status),
                                 );
@@ -1069,47 +1313,70 @@ class _ComplaintManagementTabState extends State<ComplaintManagementTab> {
   String _selectedPriority = 'Semua';
   String _selectedStatus = 'Semua';
   final List<String> _priorityOptions = ['Semua', 'Tinggi', 'Sedang', 'Rendah'];
-  final List<String> _statusOptions = ['Semua', 'Pending', 'Diproses', 'Selesai'];
+  final List<String> _statusOptions = [
+    'Semua',
+    'Pending',
+    'Diproses',
+    'Selesai',
+  ];
 
   List<Map<String, dynamic>> get _complaints {
-    return ComplaintService.complaints.map((complaint) => {
-      'id': complaint.id,
-      'customer': complaint.customerName,
-      'subject': complaint.subject,
-      'description': complaint.description,
-      'priority': _priorityToString(complaint.priority),
-      'status': _statusToString(complaint.status),
-      'product': complaint.productName ?? 'Umum',
-      'date': complaint.createdDate.toString().split(' ')[0],
-      'chat': complaint.chat,
-    }).toList();
+    return ComplaintService.complaints
+        .map(
+          (complaint) => {
+            'id': complaint.id,
+            'customer': complaint.customerName,
+            'subject': complaint.subject,
+            'description': complaint.description,
+            'priority': _priorityToString(complaint.priority),
+            'status': _statusToString(complaint.status),
+            'product': complaint.productName ?? 'Umum',
+            'date': complaint.createdDate.toString().split(' ')[0],
+            'chat': complaint.chat,
+          },
+        )
+        .toList();
   }
 
   String _priorityToString(ComplaintPriority priority) {
     switch (priority) {
-      case ComplaintPriority.low: return 'Rendah';
-      case ComplaintPriority.medium: return 'Sedang';
-      case ComplaintPriority.high: return 'Tinggi';
-      case ComplaintPriority.urgent: return 'Mendesak';
+      case ComplaintPriority.low:
+        return 'Rendah';
+      case ComplaintPriority.medium:
+        return 'Sedang';
+      case ComplaintPriority.high:
+        return 'Tinggi';
+      case ComplaintPriority.urgent:
+        return 'Mendesak';
     }
   }
 
   String _statusToString(ComplaintStatus status) {
     switch (status) {
-      case ComplaintStatus.submitted: return 'Pending';
-      case ComplaintStatus.reviewed: return 'Diproses';
-      case ComplaintStatus.inProgress: return 'Diproses';
-      case ComplaintStatus.waitingCustomer: return 'Diproses';
-      case ComplaintStatus.resolved: return 'Selesai';
-      case ComplaintStatus.closed: return 'Selesai';
-      case ComplaintStatus.rejected: return 'Selesai';
+      case ComplaintStatus.submitted:
+        return 'Pending';
+      case ComplaintStatus.reviewed:
+        return 'Diproses';
+      case ComplaintStatus.inProgress:
+        return 'Diproses';
+      case ComplaintStatus.waitingCustomer:
+        return 'Diproses';
+      case ComplaintStatus.resolved:
+        return 'Selesai';
+      case ComplaintStatus.closed:
+        return 'Selesai';
+      case ComplaintStatus.rejected:
+        return 'Selesai';
     }
   }
 
   List<Map<String, dynamic>> get _filteredComplaints {
     return _complaints.where((complaint) {
-      final priorityMatch = _selectedPriority == 'Semua' || complaint['priority'] == _selectedPriority;
-      final statusMatch = _selectedStatus == 'Semua' || complaint['status'] == _selectedStatus;
+      final priorityMatch =
+          _selectedPriority == 'Semua' ||
+          complaint['priority'] == _selectedPriority;
+      final statusMatch =
+          _selectedStatus == 'Semua' || complaint['status'] == _selectedStatus;
       return priorityMatch && statusMatch;
     }).toList();
   }
@@ -1122,7 +1389,9 @@ class _ComplaintManagementTabState extends State<ComplaintManagementTab> {
 
   void _replyToComplaint(int index) {
     final complaintMap = _filteredComplaints[index];
-    final originalComplaint = ComplaintService.getComplaintById(complaintMap['id'])!;
+    final originalComplaint = ComplaintService.getComplaintById(
+      complaintMap['id'],
+    )!;
     final TextEditingController messageController = TextEditingController();
 
     showDialog(
@@ -1142,9 +1411,14 @@ class _ComplaintManagementTabState extends State<ComplaintManagementTab> {
                       final chat = originalComplaint.chat[chatIndex];
                       final isAdmin = chat['sender'] == 'admin';
                       return Align(
-                        alignment: isAdmin ? Alignment.centerRight : Alignment.centerLeft,
+                        alignment: isAdmin
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
                         child: Container(
-                          margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                          margin: const EdgeInsets.symmetric(
+                            vertical: 4,
+                            horizontal: 8,
+                          ),
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: isAdmin ? kGreen : Colors.grey[200],
@@ -1192,17 +1466,25 @@ class _ComplaintManagementTabState extends State<ComplaintManagementTab> {
                     IconButton(
                       onPressed: () {
                         if (messageController.text.isNotEmpty) {
-                          final updatedChat = List<Map<String, dynamic>>.from(originalComplaint.chat)
-                            ..add({
-                              'sender': 'admin',
-                              'message': messageController.text,
-                              'time': DateTime.now().toString().substring(0, 16).replaceAll('T', ' '),
-                            });
+                          final updatedChat =
+                              List<Map<String, dynamic>>.from(
+                                originalComplaint.chat,
+                              )..add({
+                                'sender': 'admin',
+                                'message': messageController.text,
+                                'time': DateTime.now()
+                                    .toString()
+                                    .substring(0, 16)
+                                    .replaceAll('T', ' '),
+                              });
                           final updatedComplaint = originalComplaint.copyWith(
                             chat: updatedChat,
                             adminResponse: messageController.text,
                           );
-                          ComplaintService.updateComplaint(originalComplaint.id, updatedComplaint);
+                          ComplaintService.updateComplaint(
+                            originalComplaint.id,
+                            updatedComplaint,
+                          );
                           setState(() {});
                           messageController.clear();
                         }
@@ -1310,7 +1592,9 @@ class _ComplaintManagementTabState extends State<ComplaintManagementTab> {
                                     ),
                                   ),
                                   const SizedBox(height: 4),
-                                  Text('${complaint['customer']} • ${complaint['date']}'),
+                                  Text(
+                                    '${complaint['customer']} • ${complaint['date']}',
+                                  ),
                                 ],
                               ),
                             ),
@@ -1320,7 +1604,9 @@ class _ComplaintManagementTabState extends State<ComplaintManagementTab> {
                                 Text(
                                   complaint['priority'],
                                   style: TextStyle(
-                                    color: complaint['priority'] == 'Tinggi' ? Colors.red : Colors.orange,
+                                    color: complaint['priority'] == 'Tinggi'
+                                        ? Colors.red
+                                        : Colors.orange,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -1353,14 +1639,18 @@ class _ComplaintManagementTabState extends State<ComplaintManagementTab> {
                             Expanded(
                               child: DropdownButtonFormField<String>(
                                 initialValue: complaint['status'],
-                                items: ['Pending', 'Diproses', 'Selesai'].map((status) {
+                                items: ['Pending', 'Diproses', 'Selesai'].map((
+                                  status,
+                                ) {
                                   return DropdownMenuItem(
                                     value: status,
                                     child: Text(status),
                                   );
                                 }).toList(),
                                 onChanged: (value) => _updateComplaintStatus(
-                                  _complaints.indexWhere((c) => c['id'] == complaint['id']),
+                                  _complaints.indexWhere(
+                                    (c) => c['id'] == complaint['id'],
+                                  ),
                                   value!,
                                 ),
                                 decoration: InputDecoration(
@@ -1409,9 +1699,27 @@ class UserManagementTab extends StatefulWidget {
 
 class _UserManagementTabState extends State<UserManagementTab> {
   final List<Map<String, dynamic>> _users = [
-    {'id': '1', 'name': 'John Doe', 'email': 'john@example.com', 'role': 'User', 'active': true},
-    {'id': '2', 'name': 'Jane Smith', 'email': 'jane@example.com', 'role': 'UMKM', 'active': true},
-    {'id': '3', 'name': 'Bob Johnson', 'email': 'bob@example.com', 'role': 'User', 'active': false},
+    {
+      'id': '1',
+      'name': 'John Doe',
+      'email': 'john@example.com',
+      'role': 'User',
+      'active': true,
+    },
+    {
+      'id': '2',
+      'name': 'Jane Smith',
+      'email': 'jane@example.com',
+      'role': 'UMKM',
+      'active': true,
+    },
+    {
+      'id': '3',
+      'name': 'Bob Johnson',
+      'email': 'bob@example.com',
+      'role': 'User',
+      'active': false,
+    },
   ];
 
   void _toggleUserStatus(int index) {
@@ -1500,10 +1808,7 @@ class ReportsTab extends StatelessWidget {
                 children: [
                   const Text(
                     'Penjualan Mingguan',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 16),
                   SizedBox(
@@ -1549,7 +1854,9 @@ class ReportsTab extends StatelessWidget {
             child: ElevatedButton.icon(
               onPressed: () {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Fitur export laporan sedang dikembangkan')),
+                  const SnackBar(
+                    content: Text('Fitur export laporan sedang dikembangkan'),
+                  ),
                 );
               },
               icon: const Icon(Icons.download),
@@ -1569,10 +1876,7 @@ class ReportsTab extends StatelessWidget {
           // Summary Stats
           const Text(
             'Ringkasan Bulanan',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
           Row(
@@ -1581,9 +1885,7 @@ class ReportsTab extends StatelessWidget {
                 child: _buildStatCard('Total Penjualan', 'Rp 5.200.000'),
               ),
               const SizedBox(width: 16),
-              Expanded(
-                child: _buildStatCard('Order Berhasil', '156'),
-              ),
+              Expanded(child: _buildStatCard('Order Berhasil', '156')),
             ],
           ),
           const SizedBox(height: 32),
@@ -1598,7 +1900,9 @@ class ReportsTab extends StatelessWidget {
                   builder: (BuildContext context) {
                     return AlertDialog(
                       title: const Text('Konfirmasi Logout'),
-                      content: const Text('Apakah Anda yakin ingin logout dari akun admin?'),
+                      content: const Text(
+                        'Apakah Anda yakin ingin logout dari akun admin?',
+                      ),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.of(context).pop(),
@@ -1643,9 +1947,7 @@ class ReportsTab extends StatelessWidget {
   Widget _buildStatCard(String title, String value) {
     return Card(
       elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -1662,10 +1964,7 @@ class ReportsTab extends StatelessWidget {
             Text(
               title,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                color: kGray,
-              ),
+              style: TextStyle(fontSize: 12, color: kGray),
             ),
           ],
         ),

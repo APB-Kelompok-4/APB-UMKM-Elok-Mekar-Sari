@@ -241,7 +241,9 @@ class _ProfilePageState extends State<ProfilePage> {
                   _buildActionTile(
                       'Bantuan & Dukungan', Icons.help_outline, () {}),
                   Divider(color: kBorder, height: 1),
-                  _buildActionTile('Keluar Akun', Icons.logout, () {},
+                  _buildActionTile('Keluar Akun', Icons.logout, () {
+                    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+                  },
                       isLogout: true),
                 ],
               ),
