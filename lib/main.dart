@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'services/firestore_test.dart';
 import 'Marketplace_Dan_Order Tracking.dart';
 import 'Sistem Keluhan_Feedback.dart' as feedback;
 import 'profile.dart';
@@ -10,7 +12,11 @@ import 'UMKM_Page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   await initializeDateFormatting('id_ID', null);
+
+  await FirestoreTest.testConnection();
+
   runApp(UMKMApp());
 }
 
