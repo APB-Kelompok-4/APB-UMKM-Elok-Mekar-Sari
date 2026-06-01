@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'Login_Page.dart';
 
 // =================== COLORS ===================
 const kGreen = Color(0xFF2D5A27);
@@ -230,19 +231,11 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
               child: Column(
                 children: [
-                  _buildActionTile('Riwayat Pembelian', Icons.history, () {}),
-                  Divider(color: kBorder, height: 1),
-                  _buildActionTile(
-                      'Daftar Alamat', Icons.location_on_outlined, () {}),
-                  Divider(color: kBorder, height: 1),
-                  _buildActionTile('Pengaturan Notifikasi',
-                      Icons.notifications_outlined, () {}),
-                  Divider(color: kBorder, height: 1),
-                  _buildActionTile(
-                      'Bantuan & Dukungan', Icons.help_outline, () {}),
-                  Divider(color: kBorder, height: 1),
                   _buildActionTile('Keluar Akun', Icons.logout, () {
-                    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+                    Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(builder: (_) => const LoginPage()),
+                      (route) => false,
+                    );
                   },
                       isLogout: true),
                 ],

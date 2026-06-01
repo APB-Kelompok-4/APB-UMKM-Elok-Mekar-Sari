@@ -8,7 +8,6 @@ import 'profile.dart';
 import 'Login_Page.dart';
 import 'Register_Page.dart';
 import 'Admin_Page.dart';
-import 'UMKM_Page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,7 +34,6 @@ class UMKMApp extends StatelessWidget {
       routes: {
         '/home': (context) => MainPage(),
         '/admin': (context) => const AdminPage(),
-        '/umkm': (context) => const UMKMPage(),
         '/register': (context) => const RegisterPage(),
       },
     );
@@ -150,7 +148,7 @@ class HomePage extends StatelessWidget {
     {"name": "Nugget Lele", "price": "Rp29.000", "cat": "Produk Unggulan", "emoji": "🍗"},
     {"name": "Sempol Jamur", "price": "Rp7.000", "cat": "Camilan Sehat", "emoji": "🍢"},
     {"name": "Bakso Jamur", "price": "Rp12.000", "cat": "Makanan Sehat", "emoji": "🍲"},
-    {"name": "Abon Jamur", "price": "Rp25.000", "cat": "Produk Unggulan", "emoji": "✨"},
+    {"name": "Abon Lele", "price": "Rp25.000", "cat": "Produk Unggulan", "emoji": "✨"},
   ];
 
   final List<Map<String, String>> berita = [

@@ -24,7 +24,6 @@ class _LoginPageState extends State<LoginPage> {
   bool _obscurePassword = true;
   bool _rememberMe = false;
   bool _isLoading = false;
-  String _selectedRole = 'User';
 
   void _login() {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
@@ -52,14 +51,9 @@ class _LoginPageState extends State<LoginPage> {
         return;
       }
 
-      // For User and UMKM roles, navigate to respective pages
-      String routeName = '/home'; // Default for User
+      // For User role, navigate to home
+      String routeName = '/home';
       String roleLabel = 'User';
-
-      if (_selectedRole == 'UMKM') {
-        routeName = '/umkm';
-        roleLabel = 'UMKM';
-      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -120,7 +114,7 @@ class _LoginPageState extends State<LoginPage> {
                   children: [
                     Expanded(
                       child: _buildSocialButton(
-                        icon: '🔵',
+                        assetPath: 'assets/icons/google.png',
                         label: 'Google',
                         onTap: () {
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -134,7 +128,7 @@ class _LoginPageState extends State<LoginPage> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: _buildSocialButton(
-                        icon: '👍',
+                        assetPath: 'assets/icons/facebook.png',
                         label: 'Facebook',
                         onTap: () {
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -179,52 +173,6 @@ class _LoginPageState extends State<LoginPage> {
                   ],
                 ),
                 const SizedBox(height: 24),
-
-                // ===== ROLE SELECTION =====
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Jenis Pengguna',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: kDark,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      initialValue: _selectedRole,
-                      items: ['User', 'UMKM'].map((role) {
-                        return DropdownMenuItem(
-                          value: role,
-                          child: Text(role),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        setState(() => _selectedRole = value!);
-                      },
-                      decoration: InputDecoration(
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: kBorder),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: kBorder),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: kGreen, width: 2),
-                        ),
-                        contentPadding:
-                            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
 
                 // ===== EMAIL INPUT =====
                 Column(
@@ -510,16 +458,6 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    // Test Credentials Hint
-                    Text(
-                      '👉 Admin: admin123 / AdminTes123 (bisa login dari User/UMKM)',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 9,
-                        color: kGray.withValues(alpha: 0.4),
-                        letterSpacing: 0.2,
-                      ),
-                    ),
                   ],
                 ),
               ],
@@ -531,7 +469,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Widget _buildSocialButton({
-    required String icon,
+    required String assetPath,
     required String label,
     required VoidCallback onTap,
   }) {
@@ -546,9 +484,22 @@ class _LoginPageState extends State<LoginPage> {
         ),
         child: Column(
           children: [
-            Text(
-              icon,
-              style: const TextStyle(fontSize: 24),
+            Image.asset(
+              assetPath,
+              width: 40,
+              height: 40,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) {
+                return Column(
+                  children: [
+                    Icon(Icons.error, color: Colors.red, size: 40),
+                    Text(
+                      'Logo error',
+                      style: TextStyle(fontSize: 10, color: Colors.red),
+                    ),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 4),
             Text(

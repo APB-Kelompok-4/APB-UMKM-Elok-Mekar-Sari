@@ -148,38 +148,38 @@ class DashboardTab extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Dashboard Utama',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: kDark,
+            const Text(
+              'Dashboard Utama',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: kDark,
+              ),
             ),
-          ),
-          const SizedBox(height: 20),
+            const SizedBox(height: 20),
 
-          // Summary Cards
-          Row(
-            children: [
-              Expanded(
-                child: _buildSummaryCard(
-                  'Total Order Hari Ini',
-                  '24',
-                  Icons.shopping_cart,
-                  kGreen,
+            // Summary Cards
+            Row(
+              children: [
+                Expanded(
+                  child: _buildSummaryCard(
+                    'Total Order Hari Ini',
+                    '24',
+                    Icons.shopping_cart,
+                    kGreen,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildSummaryCard(
-                  'Total Pendapatan',
-                  'Rp 1.250.000',
-                  Icons.attach_money,
-                  kGreenLight,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildSummaryCard(
+                    'Total Pendapatan',
+                    'Rp 1.250.000',
+                    Icons.attach_money,
+                    kGreenLight,
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
           const SizedBox(height: 16),
           Row(
             children: [
@@ -218,7 +218,6 @@ class DashboardTab extends StatelessWidget {
           _buildRecentOrdersList(),
 
           const SizedBox(height: 32),
-
           // Pending Complaints
           const Text(
             'Keluhan Pending',
@@ -740,6 +739,13 @@ class _ProductManagementTabState extends State<ProductManagementTab> {
                       Expanded(
                         child: OutlinedButton(
                           onPressed: () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.black,
+                            side: BorderSide(color: kGreen),
+                            textStyle: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                           child: const Text('Batal'),
                         ),
                       ),
@@ -780,6 +786,10 @@ class _ProductManagementTabState extends State<ProductManagementTab> {
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: kGreen,
+                            foregroundColor: Colors.black,
+                            textStyle: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                           child: const Text('Tambah'),
                         ),
@@ -939,7 +949,13 @@ class _ProductManagementTabState extends State<ProductManagementTab> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Batal'),
+                child: const Text(
+                  'Batal',
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
               ElevatedButton(
                 onPressed: () {
@@ -972,7 +988,13 @@ class _ProductManagementTabState extends State<ProductManagementTab> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: kGreen,
                 ),
-                child: const Text('Update'),
+                child: const Text(
+                  'Update',
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ],
           );
@@ -1255,8 +1277,12 @@ class _OrderManagementTabState extends State<OrderManagementTab> {
                               children: ['Dikemas', 'Dikirim', 'Selesai'].map((
                                 status,
                               ) {
+                                final bool isSelected = order['status'] == status;
+                                final Color buttonColor = isSelected
+                                    ? kGray
+                                    : _getStatusColor(status);
                                 return ElevatedButton(
-                                  onPressed: order['status'] == status
+                                  onPressed: isSelected
                                       ? null
                                       : () => _updateOrderStatus(
                                           _orders.indexWhere(
@@ -1264,10 +1290,16 @@ class _OrderManagementTabState extends State<OrderManagementTab> {
                                           ),
                                           status,
                                         ),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: order['status'] == status
-                                        ? kGray
-                                        : kGreen,
+                                  style: ButtonStyle(
+                                    backgroundColor:
+                                        WidgetStateProperty.all(buttonColor),
+                                    foregroundColor:
+                                        WidgetStateProperty.all(Colors.black),
+                                    textStyle: WidgetStateProperty.all(
+                                      const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
                                   ),
                                   child: Text(status),
                                 );
@@ -1629,8 +1661,14 @@ class _ComplaintManagementTabState extends State<ComplaintManagementTab> {
                           children: [
                             ElevatedButton.icon(
                               onPressed: () => _replyToComplaint(index),
-                              icon: const Icon(Icons.chat_bubble_outline),
-                              label: const Text('Balas Chat'),
+                              icon: const Icon(Icons.chat_bubble_outline, color: Colors.black),
+                              label: const Text(
+                                'Balas Chat',
+                                style: TextStyle(
+                                  color: Colors.black,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: kGreen,
                               ),
@@ -1859,8 +1897,14 @@ class ReportsTab extends StatelessWidget {
                   ),
                 );
               },
-              icon: const Icon(Icons.download),
-              label: const Text('Export Laporan'),
+              icon: const Icon(Icons.download, color: Colors.black),
+              label: const Text(
+                'Export Laporan',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: kGreen,
                 padding: const EdgeInsets.symmetric(vertical: 16),
@@ -1906,6 +1950,12 @@ class ReportsTab extends StatelessWidget {
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.of(context).pop(),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.black,
+                            textStyle: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                           child: const Text('Batal'),
                         ),
                         ElevatedButton(
@@ -1919,6 +1969,10 @@ class ReportsTab extends StatelessWidget {
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red,
+                            foregroundColor: Colors.black,
+                            textStyle: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                           child: const Text('Logout'),
                         ),
