@@ -142,6 +142,53 @@ enum OrderStatus {
   cancelled
 }
 
+Widget buildProductImage(dynamic img, {double? width, double? height, BoxFit fit = BoxFit.cover}) {
+  if (img is Uint8List && img.isNotEmpty) {
+    return Image.memory(
+      img,
+      width: width,
+      height: height,
+      fit: fit,
+      errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image, size: 40, color: kGray),
+    );
+  }
+
+  if (img is String && img.startsWith('assets/')) {
+    return Image.asset(
+      img,
+      width: width,
+      height: height,
+      fit: fit,
+      errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image, size: 40, color: kGray),
+    );
+  }
+
+  if (img is String && (img.contains('/') || img.contains('\\'))) {
+    final file = File(img);
+    if (file.existsSync()) {
+      return Image.file(
+        file,
+        width: width,
+        height: height,
+        fit: fit,
+        errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image, size: 40, color: kGray),
+      );
+    }
+  }
+
+  if (img is String && (img.startsWith('http://') || img.startsWith('https://'))) {
+    return Image.network(
+      img,
+      width: width,
+      height: height,
+      fit: fit,
+      errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image, size: 40, color: kGray),
+    );
+  }
+
+  return Icon(Icons.image, size: 40, color: kGray);
+}
+
 // MARKETPLACE PAGE
 class MarketplacePage extends StatefulWidget {
   const MarketplacePage({Key? key}) : super(key: key);
@@ -315,7 +362,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
                   padding: const EdgeInsets.all(12),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
-                    childAspectRatio: 0.72,
+                    childAspectRatio: 0.70,
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 12,
                   ),
@@ -381,6 +428,12 @@ class ProductCard extends StatelessWidget {
                       final img = product.imageUrl;
                       if (img is Uint8List && img.isNotEmpty) {
                         return Image.memory(
+                          img,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image, size: 50, color: kGray),
+                        );
+                      } else if (img is String && img.startsWith('assets/')) {
+                        return Image.asset(
                           img,
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image, size: 50, color: kGray),
@@ -475,30 +528,28 @@ class ProductCard extends StatelessWidget {
             ),
 
             const SizedBox(height: 4),
-            // Add to cart button
+            // Navigate to product detail
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
               child: SizedBox(
                 width: double.infinity,
-                height: 34,
+                height: 32,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: kGreen,
                     padding: const EdgeInsets.symmetric(vertical: 0),
                   ),
                   onPressed: () {
-                    CartManager().addToCart(product);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content:
-                            Text('${product.name} ditambahkan ke keranjang'),
-                        duration: const Duration(seconds: 1),
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ProductDetailPage(product: product),
                       ),
                     );
                   },
                   child: const Text(
                     'Beli',
-                    style: TextStyle(fontSize: 10, color: Colors.white),
+                    style: TextStyle(fontSize: 12, color: Colors.white),
                   ),
                 ),
               ),
@@ -544,8 +595,51 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             Container(
               width: double.infinity,
               height: 250,
-              color: kGreenPale,
-              child: Icon(Icons.image, size: 100, color: kGray),
+              decoration: BoxDecoration(
+                color: kGreenPale,
+              ),
+              child: Center(
+                child: () {
+                  final img = widget.product.imageUrl;
+                  if (img is Uint8List && img.isNotEmpty) {
+                    return Image.memory(
+                      img,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image, size: 50, color: kGray),
+                    );
+                  } else if (img is String && img.startsWith('assets/')) {
+                    return Image.asset(
+                      img,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image, size: 50, color: kGray),
+                    );
+                  } else if (img is String && (img.contains('/') || img.contains('\\'))) {
+                    final file = File(img);
+                    if (file.existsSync()) {
+                      return Image.file(
+                        file,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: double.infinity,
+                        errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image, size: 50, color: kGray),
+                      );
+                    }
+                  } else if (img is String && (img.startsWith('http://') || img.startsWith('https://'))) {
+                    return Image.network(
+                      img,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image, size: 50, color: kGray),
+                    );
+                  }
+                  return Icon(Icons.image, size: 100, color: kGray);
+                }(),
+              ),
             ),
 
             Padding(
@@ -1055,7 +1149,15 @@ class CartItemWidget extends StatelessWidget {
                 color: kBorder.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(Icons.image, color: kGray, size: 40),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: buildProductImage(
+                  item.product.imageUrl,
+                  width: 80,
+                  height: 80,
+                  fit: BoxFit.cover,
+                ),
+              ),
             ),
             const SizedBox(width: 12),
             // Product info
@@ -1200,7 +1302,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   
   final List<Map<String, String>> paymentMethods = [
     {'id': 'transfer_bank', 'name': 'Transfer Bank', 'icon': '🏦'},
-    {'id': 'ewallet', 'name': 'E-Wallet (GCash, OVO, Dana)', 'icon': '📱'},
+    {'id': 'ewallet', 'name': 'E-wallet(Gopay, Ovo, Dana)', 'icon': '📱'},
     {'id': 'cod', 'name': 'Bayar di Tempat (COD)', 'icon': '💵'},
   ];
 
@@ -1273,7 +1375,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
                                   color: kBorder.withValues(alpha: 0.3),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
-                                child: Icon(Icons.image, color: kGray, size: 30),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: buildProductImage(
+                                    item.product.imageUrl,
+                                    width: 60,
+                                    height: 60,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -1485,14 +1595,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
                               style: const TextStyle(fontSize: 20),
                             ),
                             const SizedBox(width: 12),
-                            Text(
-                              method['name']!,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
+                            Expanded(
+                              child: Text(
+                                method['name']!,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 2,
                               ),
                             ),
                           ],
                         ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                        visualDensity: VisualDensity.compact,
                       ),
                     );
                   }).toList(),

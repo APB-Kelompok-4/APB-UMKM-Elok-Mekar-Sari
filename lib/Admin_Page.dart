@@ -64,13 +64,7 @@ class _AdminPageState extends State<AdminPage> {
 
   List<Widget> _getAppBarActions() {
     if (_selectedIndex == 1) {
-      return [
-        IconButton(
-          onPressed: _addProductFromAppBar,
-          icon: const Icon(Icons.add),
-          tooltip: 'Tambah Produk',
-        ),
-      ];
+      return [];
     }
     if (_selectedIndex == 5) {
       return [
@@ -86,15 +80,6 @@ class _AdminPageState extends State<AdminPage> {
       ];
     }
     return [];
-  }
-
-  void _addProductFromAppBar() {
-    // Move to product tab and then open tambah produk modal via a callback in the product tab state.
-    if (_selectedIndex == 1) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Gunakan tombol Tambah Produk di tab produk untuk menambahkan.')),
-      );
-    }
   }
 
   @override
@@ -443,13 +428,6 @@ class ProductManagementTab extends StatefulWidget {
 class _ProductManagementTabState extends State<ProductManagementTab> {
   List<Map<String, dynamic>> get _products => ProductService.products;
 
-  void _toggleProductStatus(int index) {
-    final updatedProduct = Map<String, dynamic>.from(_products[index]);
-    updatedProduct['active'] = !(updatedProduct['active'] as bool);
-    ProductService.updateProduct(index, updatedProduct);
-    setState(() {});
-  }
-
   void _deleteProduct(int index) {
     ProductService.deleteProduct(index);
     setState(() {});
@@ -475,6 +453,24 @@ class _ProductManagementTabState extends State<ProductManagementTab> {
     }
 
     if (imageValue is String) {
+      if (imageValue.startsWith('assets/')) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.asset(
+            imageValue,
+            width: 48,
+            height: 48,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => Container(
+              width: 48,
+              height: 48,
+              color: kBg,
+              child: const Icon(Icons.broken_image, size: 20, color: Colors.red),
+            ),
+          ),
+        );
+      }
+
       final imageFile = File(imageValue);
       if (imageFile.existsSync()) {
         return ClipRRect(
@@ -1023,14 +1019,13 @@ class _ProductManagementTabState extends State<ProductManagementTab> {
                     ),
                   ),
                 ),
-                ElevatedButton.icon(
+                ElevatedButton(
                   onPressed: _addProduct,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Tambah Produk'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: kGreen,
                     foregroundColor: Colors.white,
                   ),
+                  child: const Text('Tambah Produk'),
                 ),
               ],
             ),
@@ -1043,103 +1038,100 @@ class _ProductManagementTabState extends State<ProductManagementTab> {
                 final product = _products[index];
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
-                  child: ExpansionTile(
-                    leading: _buildProductImageWidget(product['image']),
-                    title: Text(
-                      product['name'],
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: product['active'] ? kDark : kGray,
-                      ),
-                    ),
-                    subtitle: Text(
-                      'Rp ${product['price']} • Stok: ${product['stock']} • ${product['category']}',
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Switch(
-                          value: product['active'],
-                          onChanged: (value) => _toggleProductStatus(index),
-                          activeThumbColor: kGreen,
-                        ),
-                        PopupMenuButton<String>(
-                          onSelected: (value) {
-                            if (value == 'edit') {
-                              _editProduct(index);
-                            } else if (value == 'delete') {
-                              _deleteProduct(index);
-                            }
-                          },
-                          itemBuilder: (context) => [
-                            const PopupMenuItem(
-                              value: 'edit',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.edit, color: Colors.black),
-                                  SizedBox(width: 8),
-                                  Text('Edit Produk'),
-                                ],
-                              ),
-                            ),
-                            const PopupMenuItem(
-                              value: 'delete',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.delete, color: Colors.red),
-                                  SizedBox(width: 8),
-                                  Text('Hapus Produk'),
-                                ],
-                              ),
-                            ),
-                          ],
-                          icon: const Icon(Icons.more_vert, color: Colors.black),
-                        ),
-                      ],
-                    ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(16),
+                        ),
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: 180,
+                          child: _buildProductImageWidget(product['image']),
+                        ),
+                      ),
                       Padding(
                         padding: const EdgeInsets.all(16),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'Deskripsi Produk',
+                            Text(
+                              product['name'],
                               style: TextStyle(
-                                fontSize: 14,
+                                fontSize: 18,
                                 fontWeight: FontWeight.bold,
+                                color: product['active'] ? kDark : kGray,
                               ),
                             ),
                             const SizedBox(height: 8),
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: kCream,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: kBorder),
+                            Text(
+                              'Rp ${product['price']} • Stok: ${product['stock']}',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: kGray,
                               ),
-                              child: Text(
-                                product['description']?.toString().isNotEmpty == true
-                                    ? product['description']
-                                    : 'Tidak ada deskripsi produk',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  height: 1.5,
-                                  color: kDark,
-                                ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              product['category'] ?? 'Kategori tidak tersedia',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: kGray,
                               ),
                             ),
                             const SizedBox(height: 12),
+                            Text(
+                              product['description']?.toString().isNotEmpty == true
+                                  ? product['description']
+                                  : 'Tidak ada deskripsi produk',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                height: 1.5,
+                                color: kDark,
+                              ),
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 16),
                             Row(
                               children: [
-                                Text(
-                                  'Status: ${product['active'] ? 'Aktif' : 'Tidak Aktif'}',
-                                  style: TextStyle(
-                                    color: product['active']
-                                        ? Colors.green
-                                        : Colors.red,
-                                    fontWeight: FontWeight.bold,
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () => _editProduct(index),
+                                    icon: const Icon(Icons.edit, color: Colors.black),
+                                    label: const Text(
+                                      'Edit',
+                                      style: TextStyle(color: Colors.black),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      side: const BorderSide(color: Colors.black),
+                                      foregroundColor: Colors.black,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () => _deleteProduct(index),
+                                    icon: const Icon(Icons.delete, color: Colors.black),
+                                    label: const Text(
+                                      'Hapus',
+                                      style: TextStyle(color: Colors.black),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      side: const BorderSide(color: Colors.black),
+                                      foregroundColor: Colors.black,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ],
