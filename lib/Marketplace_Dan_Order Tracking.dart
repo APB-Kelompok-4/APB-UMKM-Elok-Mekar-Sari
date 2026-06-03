@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import 'Chatbot.dart' as chatbot;
 import 'services/product_service.dart';
+import 'Sistem Keluhan_Feedback.dart';
 
 // bagian warna
 const kGreen = Color(0xFF2D5A27);
@@ -1820,7 +1821,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Batalkan'),
+              child: const Text(
+                'Batalkan',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: kDark,
+                ),
+              ),
             ),
             ElevatedButton(
               onPressed: () {
@@ -1830,7 +1837,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: kGreen,
               ),
-              child: const Text('Konfirmasi'),
+              child: const Text(
+                'Konfirmasi',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: kDark,
+                ),
+              ),
             ),
           ],
         ),
@@ -2333,9 +2346,14 @@ class OrderDetailPage extends StatelessWidget {
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Hubungi customer service'),
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ComplaintPage(
+                            currentUserId: 'user_id',
+                            currentUserName: 'user_name',
+                            currentUserEmail: 'user_email',
+                          ),
                         ),
                       );
                     },
