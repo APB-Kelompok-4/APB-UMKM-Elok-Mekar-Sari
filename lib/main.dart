@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'services/firestore_test.dart';
 import 'Marketplace_Dan_Order Tracking.dart';
 import 'Sistem Keluhan_Feedback.dart' as feedback;
@@ -58,33 +60,79 @@ class MainPage extends StatefulWidget {
 
 class _MainPageState extends State<MainPage> {
   int _selectedIndex = 0;
-  
-  late List<Widget> _pages;
-  
+
+  // Data user dari Firebase Auth + Firestore
+  String _userId = '';
+  String _userName = 'Pengguna';
+  String _userEmail = '';
+  bool _userLoaded = false;
+
   @override
   void initState() {
     super.initState();
-    _pages = [
-      HomePage(),
-      MarketplacePage(),
-      OrderTrackingPage(),
-      const feedback.ComplaintPage(
-        currentUserId: 'USR-001',
-        currentUserName: 'Pelanggan',
-        currentUserEmail: 'pelanggan@umkm.com',
-      ),
-      ProfilePage(onProfileUpdate: _refreshProfile),
-    ];
+    _loadUserData();
   }
-  
+
+  // Ambil nama & email user yang sedang login
+  Future<void> _loadUserData() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (mounted) {
+        setState(() {
+          _userId    = user.uid;
+          _userEmail = user.email ?? '';
+          _userName  = doc.data()?['name'] ?? user.email ?? 'Pengguna';
+          _userLoaded = true;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _userId    = user.uid;
+          _userEmail = user.email ?? '';
+          _userName  = user.email ?? 'Pengguna';
+          _userLoaded = true;
+        });
+      }
+    }
+  }
+
   void _refreshProfile() {
-    setState(() {
-      _pages[4] = ProfilePage(onProfileUpdate: _refreshProfile);
-    });
+    _loadUserData();
   }
+
+  // Bangun daftar halaman setelah data user tersedia
+  List<Widget> get _pages => [
+    HomePage(),
+    MarketplacePage(),
+    OrderTrackingPage(),
+    feedback.ComplaintPage(
+      currentUserId: _userId.isEmpty ? 'guest' : _userId,
+      currentUserName: _userName,
+      currentUserEmail: _userEmail,
+    ),
+    ProfilePage(onProfileUpdate: _refreshProfile),
+  ];
 
   @override
   Widget build(BuildContext context) {
+    // Tampilkan loading dulu sampai data user siap
+    if (!_userLoaded) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFFAFAF7),
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFF2D5A27)),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: kBg,
       body: _pages[_selectedIndex],

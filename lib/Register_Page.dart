@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 const kGreen = Color(0xFF2D5A27);
 const kGreenLight = Color(0xFF4A8C3F);
@@ -25,10 +27,11 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _agreeTerms = false;
   bool _isLoading = false;
 
-  void _register() {
-    if (_nameController.text.isEmpty ||
-        _emailController.text.isEmpty ||
-        _whatsappController.text.isEmpty ||
+  // ===== FIREBASE REGISTER =====
+  Future<void> _register() async {
+    if (_nameController.text.trim().isEmpty ||
+        _emailController.text.trim().isEmpty ||
+        _whatsappController.text.trim().isEmpty ||
         _passwordController.text.isEmpty) {
       _showErrorSnackBar('Semua field harus diisi');
       return;
@@ -46,30 +49,63 @@ class _RegisterPageState extends State<RegisterPage> {
 
     setState(() => _isLoading = true);
 
-    // Simulate registration process
-    Future.delayed(const Duration(seconds: 2), () {
+    try {
+      // 1. Buat akun di Firebase Authentication
+      final UserCredential userCredential =
+          await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+
+      final uid = userCredential.user!.uid;
+
+      // 2. Simpan data profil user ke Firestore koleksi 'users'
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'uid': uid,
+        'name': _nameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'phone': _whatsappController.text.trim(),
+        'address': '',
+        'city': '',
+        'role': 'user',              // default role = user
+        'joinDate': FieldValue.serverTimestamp(),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      if (!mounted) return;
       setState(() => _isLoading = false);
 
-      // Show success message and navigate to login
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text(
-            'Akun berhasil dibuat! Silakan login.',
-          ),
+        const SnackBar(
+          content: Text('Akun berhasil dibuat! Silakan login.'),
           backgroundColor: kGreen,
         ),
       );
 
       Navigator.pop(context);
-    });
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+
+      String message = 'Pendaftaran gagal';
+      if (e.code == 'email-already-in-use') {
+        message = 'Email sudah terdaftar. Silakan login';
+      } else if (e.code == 'invalid-email') {
+        message = 'Format email tidak valid';
+      } else if (e.code == 'weak-password') {
+        message = 'Password terlalu lemah';
+      }
+      _showErrorSnackBar(message);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      _showErrorSnackBar('Terjadi kesalahan: $e');
+    }
   }
 
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ),
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
   }
 
@@ -106,7 +142,6 @@ class _RegisterPageState extends State<RegisterPage> {
                 ),
                 const SizedBox(height: 32),
 
-                // ===== GREETING =====
                 const Text(
                   'Daftar Akun Baru',
                   style: TextStyle(
@@ -119,238 +154,45 @@ class _RegisterPageState extends State<RegisterPage> {
                 Text(
                   'Mulai perjalanan Anda di pasar seni digital kami.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: kGray,
-                    height: 1.5,
-                  ),
+                  style: TextStyle(fontSize: 14, color: kGray, height: 1.5),
                 ),
-                const SizedBox(height: 24),
-                // ===== SOCIAL SIGN UP BUTTONS =====
-                Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Sign up dengan Google sedang dikembangkan'),
-                            ),
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: kBorder),
-                            borderRadius: BorderRadius.circular(8),
-                            color: Colors.white,
-                          ),
-                          child: Column(
-                            children: [
-                              Image.asset(
-                                'assets/icons/google.png',
-                                width: 32,
-                                height: 32,
-                              ),
-                              const SizedBox(height: 4),
-                              const Text(
-                                'Google',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: kDark,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Sign up dengan Facebook sedang dikembangkan'),
-                            ),
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: kBorder),
-                            borderRadius: BorderRadius.circular(8),
-                            color: Colors.white,
-                          ),
-                          child: Column(
-                            children: [
-                              Image.asset(
-                                'assets/icons/facebook.png',
-                                width: 32,
-                                height: 32,
-                              ),
-                              const SizedBox(height: 4),
-                              const Text(
-                                'Facebook',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: kDark,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 32),
 
-                const SizedBox(height: 24),
-
-                // ===== NAMA LENGKAP INPUT =====
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'NAMA LENGKAP',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: kDark,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _nameController,
-                      decoration: InputDecoration(
-                        hintText: 'Masukkan nama Anda',
-                        hintStyle: TextStyle(color: kGray.withOpacity(0.5)),
-                        prefixIcon: Icon(Icons.person_outline, color: kGray),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: kBorder),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: kBorder),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: kGreen, width: 2),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
-                      ),
-                    ),
-                  ],
-                ),
+                // ===== NAMA LENGKAP =====
+                _buildField('Nama Lengkap', _nameController,
+                    hint: 'Masukkan nama lengkap Anda',
+                    icon: Icons.person_outline),
                 const SizedBox(height: 16),
 
-                // ===== EMAIL INPUT =====
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'EMAIL',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: kDark,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: InputDecoration(
-                        hintText: 'nama@email.com',
-                        hintStyle: TextStyle(color: kGray.withOpacity(0.5)),
-                        prefixIcon: Icon(Icons.email_outlined, color: kGray),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: kBorder),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: kBorder),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: kGreen, width: 2),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
-                      ),
-                    ),
-                  ],
-                ),
+                // ===== EMAIL =====
+                _buildField('Alamat Email', _emailController,
+                    hint: 'nama@email.com',
+                    icon: Icons.email_outlined,
+                    keyboardType: TextInputType.emailAddress),
                 const SizedBox(height: 16),
 
-                // ===== WHATSAPP INPUT =====
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'NO. WHATSAPP',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: kDark,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _whatsappController,
-                      keyboardType: TextInputType.phone,
-                      decoration: InputDecoration(
-                        hintText: '0812...',
-                        hintStyle: TextStyle(color: kGray.withOpacity(0.5)),
-                        prefixIcon: Icon(Icons.phone_outlined, color: kGray),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: kBorder),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: kBorder),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: kGreen, width: 2),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
-                      ),
-                    ),
-                  ],
-                ),
+                // ===== WHATSAPP =====
+                _buildField('Nomor WhatsApp', _whatsappController,
+                    hint: '08xxxxxxxxxx',
+                    icon: Icons.phone_outlined,
+                    keyboardType: TextInputType.phone),
                 const SizedBox(height: 16),
 
-                // ===== PASSWORD INPUT =====
+                // ===== PASSWORD =====
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'KATA SANDI',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: kDark,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
+                    Text('Password',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: kDark)),
                     const SizedBox(height: 8),
                     TextField(
                       controller: _passwordController,
                       obscureText: _obscurePassword,
                       decoration: InputDecoration(
-                        hintText: 'Min. 8 karakter',
+                        hintText: 'Minimal 8 karakter',
                         hintStyle: TextStyle(color: kGray.withOpacity(0.5)),
                         prefixIcon: Icon(Icons.lock_outline, color: kGray),
                         suffixIcon: IconButton(
@@ -360,12 +202,8 @@ class _RegisterPageState extends State<RegisterPage> {
                                 : Icons.visibility,
                             color: kGray,
                           ),
-                          onPressed: () {
-                            setState(
-                              () =>
-                                  _obscurePassword = !_obscurePassword,
-                            );
-                          },
+                          onPressed: () => setState(
+                              () => _obscurePassword = !_obscurePassword),
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -396,13 +234,11 @@ class _RegisterPageState extends State<RegisterPage> {
                       height: 20,
                       child: Checkbox(
                         value: _agreeTerms,
-                        onChanged: (value) {
-                          setState(() => _agreeTerms = value ?? false);
-                        },
+                        onChanged: (value) =>
+                            setState(() => _agreeTerms = value ?? false),
                         activeColor: kGreen,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(4),
-                        ),
+                            borderRadius: BorderRadius.circular(4)),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -411,42 +247,29 @@ class _RegisterPageState extends State<RegisterPage> {
                         text: TextSpan(
                           children: [
                             TextSpan(
-                              text: 'Saya setuju dengan ',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: kGray,
-                              ),
-                            ),
+                                text: 'Saya setuju dengan ',
+                                style:
+                                    TextStyle(fontSize: 12, color: kGray)),
                             TextSpan(
-                              text: 'Syarat & Ketentuan ',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: kGreen,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                                text: 'Syarat & Ketentuan ',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: kGreen,
+                                    fontWeight: FontWeight.w600)),
                             TextSpan(
-                              text: 'serta ',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: kGray,
-                              ),
-                            ),
+                                text: 'serta ',
+                                style:
+                                    TextStyle(fontSize: 12, color: kGray)),
                             TextSpan(
-                              text: 'Kebijakan Privasi ',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: kGreen,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                                text: 'Kebijakan Privasi ',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: kGreen,
+                                    fontWeight: FontWeight.w600)),
                             TextSpan(
-                              text: 'Elok Mekar Sari',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: kGray,
-                              ),
-                            ),
+                                text: 'Elok Mekar Sari',
+                                style:
+                                    TextStyle(fontSize: 12, color: kGray)),
                           ],
                         ),
                       ),
@@ -465,8 +288,7 @@ class _RegisterPageState extends State<RegisterPage> {
                       disabledBackgroundColor: kGreen.withOpacity(0.5),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
+                          borderRadius: BorderRadius.circular(8)),
                       elevation: 0,
                     ),
                     child: _isLoading
@@ -474,13 +296,13 @@ class _RegisterPageState extends State<RegisterPage> {
                             height: 20,
                             width: 20,
                             child: CircularProgressIndicator(
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white),
                               strokeWidth: 2,
                             ),
                           )
                         : const Text(
-                            'Sign Up',
+                            'Daftar Sekarang',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
@@ -490,54 +312,16 @@ class _RegisterPageState extends State<RegisterPage> {
                           ),
                   ),
                 ),
-                const SizedBox(height: 24),
-
-                // ===== DIVIDER =====
-                Row(
-                  children: [
-                    Expanded(
-                      child: Divider(
-                        color: kBorder,
-                        thickness: 1,
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Text(
-                        'Atau daftar dengan',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: kGray,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: Divider(
-                        color: kBorder,
-                        thickness: 1,
-                      ),
-                    ),
-                  ],
-                ),
                 const SizedBox(height: 16),
 
                 // ===== LOGIN LINK =====
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
-                      'Sudah memiliki akun? ',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: kGray,
-                      ),
-                    ),
+                    Text('Sudah memiliki akun? ',
+                        style: TextStyle(fontSize: 12, color: kGray)),
                     GestureDetector(
-                      onTap: () {
-                        Navigator.pop(context);
-                      },
+                      onTap: () => Navigator.pop(context),
                       child: const Text(
                         'Masuk Sekarang',
                         style: TextStyle(
@@ -555,6 +339,47 @@ class _RegisterPageState extends State<RegisterPage> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildField(
+    String label,
+    TextEditingController controller, {
+    String hint = '',
+    IconData? icon,
+    TextInputType keyboardType = TextInputType.text,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: TextStyle(
+                fontSize: 12, fontWeight: FontWeight.w600, color: kDark)),
+        const SizedBox(height: 8),
+        TextField(
+          controller: controller,
+          keyboardType: keyboardType,
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(color: kGray.withOpacity(0.5)),
+            prefixIcon: icon != null ? Icon(icon, color: kGray) : null,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: kBorder),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: kBorder),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: kGreen, width: 2),
+            ),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          ),
+        ),
+      ],
     );
   }
 

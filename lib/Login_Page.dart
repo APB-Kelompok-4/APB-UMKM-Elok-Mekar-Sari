@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'Register_Page.dart';
 
 const kGreen = Color(0xFF2D5A27);
@@ -25,45 +27,75 @@ class _LoginPageState extends State<LoginPage> {
   bool _rememberMe = false;
   bool _isLoading = false;
 
-  void _login() {
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+  // ===== FIREBASE LOGIN =====
+  Future<void> _login() async {
+    if (_emailController.text.trim().isEmpty ||
+        _passwordController.text.isEmpty) {
       _showErrorSnackBar('Email dan password harus diisi');
       return;
     }
 
     setState(() => _isLoading = true);
 
-    // Simulate login process
-    Future.delayed(const Duration(seconds: 2), () {
+    try {
+      // Login dengan Firebase Auth
+      final UserCredential userCredential =
+          await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+
+      // Cek role user dari Firestore
+      final uid = userCredential.user!.uid;
+      final docSnap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+
+      if (!mounted) return;
       setState(() => _isLoading = false);
 
-      // Check if login as Admin with hardcoded credentials (regardless of selected role)
-      if (_emailController.text == 'admin123' &&
-          _passwordController.text == 'AdminTes123') {
-        // Admin login successful
+      final role = docSnap.data()?['role'] ?? 'user';
+
+      if (role == 'admin') {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Login Admin berhasil!'),
             backgroundColor: kGreen,
           ),
         );
-        Navigator.pushNamedAndRemoveUntil(context, '/admin', (route) => false);
-        return;
+        Navigator.pushNamedAndRemoveUntil(
+            context, '/admin', (route) => false);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Login berhasil!'),
+            backgroundColor: kGreen,
+          ),
+        );
+        Navigator.pushNamedAndRemoveUntil(
+            context, '/home', (route) => false);
       }
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
 
-      // For User role, navigate to home
-      String routeName = '/home';
-      String roleLabel = 'User';
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Login $roleLabel berhasil!'),
-          backgroundColor: kGreen,
-        ),
-      );
-
-      Navigator.pushNamedAndRemoveUntil(context, routeName, (route) => false);
-    });
+      String message = 'Login gagal';
+      if (e.code == 'user-not-found') {
+        message = 'Akun tidak ditemukan';
+      } else if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+        message = 'Email atau password salah';
+      } else if (e.code == 'invalid-email') {
+        message = 'Format email tidak valid';
+      } else if (e.code == 'too-many-requests') {
+        message = 'Terlalu banyak percobaan. Coba lagi nanti';
+      }
+      _showErrorSnackBar(message);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      _showErrorSnackBar('Terjadi kesalahan: $e');
+    }
   }
 
   void _showErrorSnackBar(String message) {
@@ -119,7 +151,8 @@ class _LoginPageState extends State<LoginPage> {
                         onTap: () {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Login dengan Google sedang dikembangkan'),
+                              content: Text(
+                                  'Login dengan Google sedang dikembangkan'),
                             ),
                           );
                         },
@@ -133,7 +166,8 @@ class _LoginPageState extends State<LoginPage> {
                         onTap: () {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Login dengan Facebook sedang dikembangkan'),
+                              content: Text(
+                                  'Login dengan Facebook sedang dikembangkan'),
                             ),
                           );
                         },
@@ -146,12 +180,7 @@ class _LoginPageState extends State<LoginPage> {
                 // ===== DIVIDER =====
                 Row(
                   children: [
-                    Expanded(
-                      child: Divider(
-                        color: kBorder,
-                        thickness: 1,
-                      ),
-                    ),
+                    Expanded(child: Divider(color: kBorder, thickness: 1)),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       child: Text(
@@ -164,12 +193,7 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ),
                     ),
-                    Expanded(
-                      child: Divider(
-                        color: kBorder,
-                        thickness: 1,
-                      ),
-                    ),
+                    Expanded(child: Divider(color: kBorder, thickness: 1)),
                   ],
                 ),
                 const SizedBox(height: 24),
@@ -190,6 +214,7 @@ class _LoginPageState extends State<LoginPage> {
                     const SizedBox(height: 8),
                     TextField(
                       controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
                       decoration: InputDecoration(
                         hintText: 'nama@email.com',
                         hintStyle: TextStyle(color: kGray.withOpacity(0.5)),
@@ -206,8 +231,8 @@ class _LoginPageState extends State<LoginPage> {
                           borderRadius: BorderRadius.circular(8),
                           borderSide: const BorderSide(color: kGreen, width: 2),
                         ),
-                        contentPadding:
-                            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
                       ),
                     ),
                   ],
@@ -218,43 +243,21 @@ class _LoginPageState extends State<LoginPage> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Kata Sandi',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: kDark,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Fitur lupa password sedang dikembangkan'),
-                              ),
-                            );
-                          },
-                          child: Text(
-                            'Lupa Kata Sandi?',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: kGreen,
-                            ),
-                          ),
-                        ),
-                      ],
+                    Text(
+                      'Password',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: kDark,
+                        letterSpacing: 0.3,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     TextField(
                       controller: _passwordController,
                       obscureText: _obscurePassword,
                       decoration: InputDecoration(
-                        hintText: '••••••••',
+                        hintText: 'Masukkan password',
                         hintStyle: TextStyle(color: kGray.withOpacity(0.5)),
                         prefixIcon: Icon(Icons.lock_outline, color: kGray),
                         suffixIcon: IconButton(
@@ -264,11 +267,8 @@ class _LoginPageState extends State<LoginPage> {
                                 : Icons.visibility,
                             color: kGray,
                           ),
-                          onPressed: () {
-                            setState(
-                              () => _obscurePassword = !_obscurePassword,
-                            );
-                          },
+                          onPressed: () =>
+                              setState(() => _obscurePassword = !_obscurePassword),
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -282,8 +282,8 @@ class _LoginPageState extends State<LoginPage> {
                           borderRadius: BorderRadius.circular(8),
                           borderSide: const BorderSide(color: kGreen, width: 2),
                         ),
-                        contentPadding:
-                            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
                       ),
                     ),
                   ],
@@ -298,9 +298,8 @@ class _LoginPageState extends State<LoginPage> {
                       height: 20,
                       child: Checkbox(
                         value: _rememberMe,
-                        onChanged: (value) {
-                          setState(() => _rememberMe = value ?? false);
-                        },
+                        onChanged: (value) =>
+                            setState(() => _rememberMe = value ?? false),
                         activeColor: kGreen,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(4),
@@ -310,10 +309,7 @@ class _LoginPageState extends State<LoginPage> {
                     const SizedBox(width: 8),
                     Text(
                       'Ingat saya di perangkat ini',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: kGray,
-                      ),
+                      style: TextStyle(fontSize: 12, color: kGray),
                     ),
                   ],
                 ),
@@ -358,27 +354,16 @@ class _LoginPageState extends State<LoginPage> {
 
                 // ===== SIGN UP LINK =====
                 GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const RegisterPage(),
-                      ),
-                    );
-                  },
+                  onTap: () => Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const RegisterPage())),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        'Belum punya akun? ',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: kGray,
-                        ),
-                      ),
-                      Text(
+                      Text('Belum punya akun? ',
+                          style: TextStyle(fontSize: 13, color: kGray)),
+                      const Text(
                         'Daftar Sekarang',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
                           color: kGreen,
@@ -390,76 +375,16 @@ class _LoginPageState extends State<LoginPage> {
                 const SizedBox(height: 24),
 
                 // ===== FOOTER =====
-                Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        GestureDetector(
-                          onTap: () {},
-                          child: Text(
-                            'SYARAT & KETENTUAN',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: kGray,
-                              fontWeight: FontWeight.w500,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Container(
-                          width: 1,
-                          height: 12,
-                          color: kBorder,
-                        ),
-                        const SizedBox(width: 16),
-                        GestureDetector(
-                          onTap: () {},
-                          child: Text(
-                            'KEBIJAKAN PRIVASI',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: kGray,
-                              fontWeight: FontWeight.w500,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Container(
-                          width: 1,
-                          height: 12,
-                          color: kBorder,
-                        ),
-                        const SizedBox(width: 16),
-                        GestureDetector(
-                          onTap: () {},
-                          child: Text(
-                            'BANTUAN',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: kGray,
-                              fontWeight: FontWeight.w500,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      '© 2026 Elok Mekar Sari. Surabaya Produk Lokal',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: kGray.withOpacity(0.6),
-                        letterSpacing: 0.2,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
+                Text(
+                  '© 2026 Elok Mekar Sari. Surabaya Produk Lokal',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: kGray.withOpacity(0.6),
+                    letterSpacing: 0.2,
+                  ),
                 ),
+                const SizedBox(height: 8),
               ],
             ),
           ),
@@ -489,27 +414,15 @@ class _LoginPageState extends State<LoginPage> {
               width: 40,
               height: 40,
               fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) {
-                return Column(
-                  children: [
-                    Icon(Icons.error, color: Colors.red, size: 40),
-                    Text(
-                      'Logo error',
-                      style: TextStyle(fontSize: 10, color: Colors.red),
-                    ),
-                  ],
-                );
-              },
+              errorBuilder: (context, error, stackTrace) =>
+                  const Icon(Icons.login, size: 40, color: kGray),
             ),
             const SizedBox(height: 4),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: kDark,
-              ),
-            ),
+            Text(label,
+                style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: kDark)),
           ],
         ),
       ),
