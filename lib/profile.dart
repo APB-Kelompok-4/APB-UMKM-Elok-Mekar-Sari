@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'Login_Page.dart';
 
-// =================== COLORS ===================
 const kGreen = Color(0xFF2D5A27);
 const kGreenPale = Color(0xFFEAF2E6);
 const kDark = Color(0xFF1A1A1A);
@@ -8,7 +10,6 @@ const kGray = Color(0xFF666666);
 const kBorder = Color(0xFFE0D8CC);
 const kBg = Color(0xFFFAFAF7);
 
-// =================== PROFILE PAGE ===================
 class ProfilePage extends StatefulWidget {
   final VoidCallback? onProfileUpdate;
   const ProfilePage({Key? key, this.onProfileUpdate}) : super(key: key);
@@ -19,88 +20,175 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   bool _isEditing = false;
+  bool _isLoading = true;
+  bool _isSaving = false;
 
-  // Form controllers
   late TextEditingController _nameController;
-  late TextEditingController _emailController;
   late TextEditingController _phoneController;
   late TextEditingController _addressController;
   late TextEditingController _cityController;
 
-  // User data
-  String _userId = 'USR-001';
-  String _name = 'Budi Santoso';
-  String _email = 'budi.santoso@email.com';
-  String _phone = '0895-3013-2581';
-  String _address = 'Jl. Semolowaru Elok No. 15';
-  String _city = 'Surabaya, Jawa Timur';
-  String _joinDate = '15 Januari 2024';
+  String _name = '';
+  String _email = '';
+  String _phone = '';
+  String _address = '';
+  String _city = '';
+  String _joinDate = '';
+  String _uid = '';
 
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: _name);
-    _emailController = TextEditingController(text: _email);
-    _phoneController = TextEditingController(text: _phone);
-    _addressController = TextEditingController(text: _address);
-    _cityController = TextEditingController(text: _city);
+    _nameController = TextEditingController();
+    _phoneController = TextEditingController();
+    _addressController = TextEditingController();
+    _cityController = TextEditingController();
+    _loadProfile();
   }
 
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _emailController.dispose();
-    _phoneController.dispose();
-    _addressController.dispose();
-    _cityController.dispose();
-    super.dispose();
+  // ===== BACA PROFIL DARI FIRESTORE =====
+  Future<void> _loadProfile() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      _uid = user.uid;
+      _email = user.email ?? '';
+
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_uid)
+          .get();
+
+      if (doc.exists && mounted) {
+        final data = doc.data()!;
+        final ts = data['joinDate'] as Timestamp?;
+        setState(() {
+          _name = data['name'] ?? '';
+          _phone = data['phone'] ?? '';
+          _address = data['address'] ?? '';
+          _city = data['city'] ?? '';
+          _joinDate = ts != null
+              ? _formatDate(ts.toDate())
+              : 'Baru bergabung';
+          _nameController.text = _name;
+          _phoneController.text = _phone;
+          _addressController.text = _address;
+          _cityController.text = _city;
+          _isLoading = false;
+        });
+      } else {
+        setState(() => _isLoading = false);
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+    }
   }
 
-  void _saveProfile() {
-    setState(() {
-      _name = _nameController.text;
-      _email = _emailController.text;
-      _phone = _phoneController.text;
-      _address = _addressController.text;
-      _city = _cityController.text;
-      _isEditing = false;
-    });
-    widget.onProfileUpdate?.call();
+  String _formatDate(DateTime date) {
+    const months = [
+      '', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    return '${date.day} ${months[date.month]} ${date.year}';
+  }
+
+  // ===== SIMPAN PROFIL KE FIRESTORE =====
+  Future<void> _saveProfile() async {
+    setState(() => _isSaving = true);
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(_uid).update({
+        'name': _nameController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'address': _addressController.text.trim(),
+        'city': _cityController.text.trim(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      setState(() {
+        _name = _nameController.text.trim();
+        _phone = _phoneController.text.trim();
+        _address = _addressController.text.trim();
+        _city = _cityController.text.trim();
+        _isEditing = false;
+        _isSaving = false;
+      });
+
+      widget.onProfileUpdate?.call();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Profil berhasil disimpan'),
+            backgroundColor: kGreen,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isSaving = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal menyimpan: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // ===== LOGOUT =====
+  Future<void> _logout() async {
+    await FirebaseAuth.instance.signOut();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+      (route) => false,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: kBg,
+        body: Center(child: CircularProgressIndicator(color: kGreen)),
+      );
+    }
+
     return Scaffold(
       backgroundColor: kBg,
       appBar: AppBar(
-        title: const Text(
-          'Profil Saya',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: const Text('Profil Saya',
+            style:
+                TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         backgroundColor: kGreen,
         elevation: 0,
         actions: [
-          TextButton.icon(
-            onPressed: () {
-              setState(() => _isEditing = !_isEditing);
-              if (!_isEditing) _saveProfile();
-            },
-            // Tambahkan baris style ini
-            style: TextButton.styleFrom(
-              foregroundColor:
-                  kGreenPale, // Menggunakan warna kGreenPale agar senada dengan tema
+          if (_isSaving)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                    color: Colors.white, strokeWidth: 2),
+              ),
+            )
+          else
+            TextButton.icon(
+              onPressed: () {
+                if (_isEditing) {
+                  _saveProfile();
+                } else {
+                  setState(() => _isEditing = true);
+                }
+              },
+              style: TextButton.styleFrom(foregroundColor: kGreenPale),
+              icon: Icon(_isEditing ? Icons.check : Icons.edit, size: 20),
+              label: Text(_isEditing ? 'Simpan' : 'Edit',
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
             ),
-            icon: Icon(_isEditing ? Icons.check : Icons.edit, size: 20),
-            label: Text(
-              _isEditing ? 'Simpan' : 'Edit',
-              style: const TextStyle(
-                  fontWeight: FontWeight
-                      .w600), // Tambahkan ketebalan agar lebih terbaca
-            ),
-          ),
         ],
       ),
       body: SingleChildScrollView(
@@ -125,42 +213,40 @@ class _ProfilePageState extends State<ProfilePage> {
                   Container(
                     width: 80,
                     height: 80,
-                    decoration: BoxDecoration(
+                    decoration: const BoxDecoration(
                       color: kGreenPale,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.person, size: 40, color: kGreen),
+                    child:
+                        const Icon(Icons.person, size: 40, color: kGreen),
                   ),
                   const SizedBox(height: 12),
-                  Text(
-                    _name,
-                    style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: kDark),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _userId,
-                    style: const TextStyle(
-                        fontSize: 13, color: kGray, letterSpacing: 1),
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: kGreenPale,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    child: Text(
-                      'Bergabung sejak $_joinDate',
+                  Text(_name.isEmpty ? 'Pengguna' : _name,
                       style: const TextStyle(
-                          fontSize: 12,
-                          color: kGreen,
-                          fontWeight: FontWeight.w600),
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: kDark)),
+                  const SizedBox(height: 4),
+                  Text(_email,
+                      style:
+                          const TextStyle(fontSize: 13, color: kGray)),
+                  const SizedBox(height: 12),
+                  if (_joinDate.isNotEmpty)
+                    Container(
+                      decoration: BoxDecoration(
+                        color: kGreenPale,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      child: Text(
+                        'Bergabung sejak $_joinDate',
+                        style: const TextStyle(
+                            fontSize: 12,
+                            color: kGreen,
+                            fontWeight: FontWeight.w600),
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -190,8 +276,6 @@ class _ProfilePageState extends State<ProfilePage> {
                     const SizedBox(height: 16),
                     _buildTextField('Nama Lengkap', _nameController),
                     const SizedBox(height: 12),
-                    _buildTextField('Email', _emailController),
-                    const SizedBox(height: 12),
                     _buildTextField('Nomor Telepon', _phoneController),
                     const SizedBox(height: 12),
                     _buildTextField('Alamat', _addressController),
@@ -217,7 +301,7 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
             const SizedBox(height: 20),
 
-            // Account Actions
+            // Logout
             Container(
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -228,22 +312,27 @@ class _ProfilePageState extends State<ProfilePage> {
                       blurRadius: 12)
                 ],
               ),
-              child: Column(
-                children: [
-                  _buildActionTile('Riwayat Pembelian', Icons.history, () {}),
-                  Divider(color: kBorder, height: 1),
-                  _buildActionTile(
-                      'Daftar Alamat', Icons.location_on_outlined, () {}),
-                  Divider(color: kBorder, height: 1),
-                  _buildActionTile('Pengaturan Notifikasi',
-                      Icons.notifications_outlined, () {}),
-                  Divider(color: kBorder, height: 1),
-                  _buildActionTile(
-                      'Bantuan & Dukungan', Icons.help_outline, () {}),
-                  Divider(color: kBorder, height: 1),
-                  _buildActionTile('Keluar Akun', Icons.logout, () {},
-                      isLogout: true),
-                ],
+              child: InkWell(
+                onTap: _logout,
+                borderRadius: BorderRadius.circular(20),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 14),
+                  child: Row(
+                    children: const [
+                      Icon(Icons.logout, size: 20, color: Colors.red),
+                      SizedBox(width: 12),
+                      Text('Keluar Akun',
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.red)),
+                      Spacer(),
+                      Icon(Icons.arrow_forward_ios,
+                          size: 16, color: Colors.red),
+                    ],
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 24),
@@ -253,13 +342,16 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildTextField(String label, TextEditingController controller) {
+  Widget _buildTextField(
+      String label, TextEditingController controller) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label,
             style: const TextStyle(
-                fontSize: 13, fontWeight: FontWeight.w600, color: kDark)),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: kDark)),
         const SizedBox(height: 6),
         TextField(
           controller: controller,
@@ -273,8 +365,8 @@ class _ProfilePageState extends State<ProfilePage> {
             focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: const BorderSide(color: kGreen, width: 2)),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12, vertical: 10),
             hintText: label,
             hintStyle: const TextStyle(color: kGray),
           ),
@@ -289,7 +381,9 @@ class _ProfilePageState extends State<ProfilePage> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(color: const Color.fromRGBO(0, 0, 0, 0.05), blurRadius: 12)
+          BoxShadow(
+              color: const Color.fromRGBO(0, 0, 0, 0.05),
+              blurRadius: 12)
         ],
       ),
       padding: const EdgeInsets.all(16),
@@ -300,8 +394,7 @@ class _ProfilePageState extends State<ProfilePage> {
               style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  color: kDark,
-                  letterSpacing: 0.5)),
+                  color: kDark)),
           const SizedBox(height: 12),
           ...children,
         ],
@@ -317,15 +410,19 @@ class _ProfilePageState extends State<ProfilePage> {
         children: [
           Text(label,
               style: const TextStyle(
-                  fontSize: 13, color: kGray, fontWeight: FontWeight.w500)),
+                  fontSize: 13,
+                  color: kGray,
+                  fontWeight: FontWeight.w500)),
           const Spacer(),
           Expanded(
             flex: 2,
             child: Text(
-              value,
+              value.isEmpty ? '-' : value,
               textAlign: TextAlign.right,
               style: const TextStyle(
-                  fontSize: 13, color: kDark, fontWeight: FontWeight.w600),
+                  fontSize: 13,
+                  color: kDark,
+                  fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -333,29 +430,12 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildActionTile(String title, IconData icon, VoidCallback onTap,
-      {bool isLogout = false}) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: isLogout ? Colors.red : kGreen),
-            const SizedBox(width: 12),
-            Text(
-              title,
-              style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: isLogout ? Colors.red : kDark),
-            ),
-            const Spacer(),
-            Icon(Icons.arrow_forward_ios,
-                size: 16, color: isLogout ? Colors.red : kGray),
-          ],
-        ),
-      ),
-    );
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _addressController.dispose();
+    _cityController.dispose();
+    super.dispose();
   }
 }

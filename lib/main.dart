@@ -1,12 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'services/firestore_test.dart';
 import 'Marketplace_Dan_Order Tracking.dart';
 import 'Sistem Keluhan_Feedback.dart' as feedback;
 import 'profile.dart';
+import 'Login_Page.dart';
+import 'Register_Page.dart';
+import 'Admin_Page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   await initializeDateFormatting('id_ID', null);
+
+  await FirestoreTest.testConnection();
+
   runApp(UMKMApp());
 }
 
@@ -21,7 +32,12 @@ class UMKMApp extends StatelessWidget {
         fontFamily: 'sans-serif',
         scaffoldBackgroundColor: const Color(0xFFFAFAF7),
       ),
-      home: SafeArea(child: MainPage()),
+      home: const LoginPage(),
+      routes: {
+        '/home': (context) => MainPage(),
+        '/admin': (context) => const AdminPage(),
+        '/register': (context) => const RegisterPage(),
+      },
     );
   }
 }
@@ -44,33 +60,79 @@ class MainPage extends StatefulWidget {
 
 class _MainPageState extends State<MainPage> {
   int _selectedIndex = 0;
-  
-  late List<Widget> _pages;
-  
+
+  // Data user dari Firebase Auth + Firestore
+  String _userId = '';
+  String _userName = 'Pengguna';
+  String _userEmail = '';
+  bool _userLoaded = false;
+
   @override
   void initState() {
     super.initState();
-    _pages = [
-      HomePage(),
-      MarketplacePage(),
-      OrderTrackingPage(),
-      const feedback.ComplaintPage(
-        currentUserId: 'USR-001',
-        currentUserName: 'Pelanggan',
-        currentUserEmail: 'pelanggan@umkm.com',
-      ),
-      ProfilePage(onProfileUpdate: _refreshProfile),
-    ];
+    _loadUserData();
   }
-  
+
+  // Ambil nama & email user yang sedang login
+  Future<void> _loadUserData() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (mounted) {
+        setState(() {
+          _userId    = user.uid;
+          _userEmail = user.email ?? '';
+          _userName  = doc.data()?['name'] ?? user.email ?? 'Pengguna';
+          _userLoaded = true;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _userId    = user.uid;
+          _userEmail = user.email ?? '';
+          _userName  = user.email ?? 'Pengguna';
+          _userLoaded = true;
+        });
+      }
+    }
+  }
+
   void _refreshProfile() {
-    setState(() {
-      _pages[4] = ProfilePage(onProfileUpdate: _refreshProfile);
-    });
+    _loadUserData();
   }
+
+  // Bangun daftar halaman setelah data user tersedia
+  List<Widget> get _pages => [
+    HomePage(),
+    MarketplacePage(),
+    OrderTrackingPage(),
+    feedback.ComplaintPage(
+      currentUserId: _userId.isEmpty ? 'guest' : _userId,
+      currentUserName: _userName,
+      currentUserEmail: _userEmail,
+    ),
+    ProfilePage(onProfileUpdate: _refreshProfile),
+  ];
 
   @override
   Widget build(BuildContext context) {
+    // Tampilkan loading dulu sampai data user siap
+    if (!_userLoaded) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFFAFAF7),
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFF2D5A27)),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: kBg,
       body: _pages[_selectedIndex],
@@ -131,10 +193,10 @@ class HomePage extends StatelessWidget {
   ];
 
   final List<Map<String, String>> products = [
-    {"name": "Nugget Lele", "price": "Rp29.000", "cat": "Produk Unggulan", "emoji": "🍗"},
-    {"name": "Sempol Jamur", "price": "Rp7.000", "cat": "Camilan Sehat", "emoji": "🍢"},
-    {"name": "Bakso Jamur", "price": "Rp12.000", "cat": "Makanan Sehat", "emoji": "🍲"},
-    {"name": "Abon Jamur", "price": "Rp25.000", "cat": "Produk Unggulan", "emoji": "✨"},
+    {"name": "Nugget Lele", "price": "Rp29.000", "cat": "Produk Unggulan", "emoji": "🍗", "image": "assets/Nugget_Lele.jpeg"},
+    {"name": "Sempol Jamur", "price": "Rp7.000", "cat": "Camilan Sehat", "emoji": "🍢", "image": "assets/Sempol_Jamur.jpeg"},
+    {"name": "Bakso Jamur", "price": "Rp12.000", "cat": "Makanan Sehat", "emoji": "🍲", "image": "assets/Bakso_Jamur.jpg"},
+    {"name": "Abon Lele", "price": "Rp25.000", "cat": "Produk Unggulan", "emoji": "✨", "image": "assets/Abon_Lele.jpeg"},
   ];
 
   final List<Map<String, String>> berita = [
@@ -143,18 +205,21 @@ class HomePage extends StatelessWidget {
       "title": "Pemkot Surabaya Dukung Urban Farming Kelompok Tani Elok Mekar Sari.",
       "desc": "Pemkot Surabaya mendukung urban farming Elok Mekar Sari yang kini membina 15 UMKM.",
       "emoji": "👥",
+      "image": "assets/Pemkot_Surabaya.jpg",
     },
     {
       "tag": "EDUKASI · 17 JANUARI 2023",
       "title": "Budidaya Jamur Tiram Kelompok Tani Elok Mekar Sari Semolowaru Surabaya",
       "desc": "Kelompok Elok Mekar Sari membudidayakan jamur tiram untuk ekonomi warga.",
       "emoji": "🌾",
+      "image": "assets/Budidaya_Jamur.jpg",
     },
     {
       "tag": "ACARA · 29 SEP 2025",
       "title": "PKM BIMA Bersama Elok Mekar Sari dalam Urban Farming",
       "desc": "Kegiatan pengabdian PKM BIMA bersama Kelompok Tani Elok Mekar Sari dalam pengembangan urban farming.",
       "emoji": "🤝",
+      "image": "assets/PKM_BIMA.jpg",
     },
   ];
 
@@ -183,18 +248,6 @@ class HomePage extends StatelessWidget {
               ),
             ],
           ),
-          actions: [
-            Container(
-              margin: const EdgeInsets.only(right: 12),
-              width: 36, height: 36,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: kBorder, width: 1.5),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.shopping_bag_outlined, size: 18, color: kDark),
-            ),
-          ],
         ),
 
         SliverList(
@@ -287,33 +340,58 @@ class HomePage extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
 
-                  // Hero Image
-                  Container(
-                    height: 200,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF6B8F5E), Color(0xFF3D6B35)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ),
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
-                          Text('🌿', style: TextStyle(fontSize: 48)),
-                          SizedBox(height: 8),
-                          Text('KELOMPOK TANI\nELOK MEKAR SARI',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: 1, height: 1.4)),
-                          SizedBox(height: 4),
-                          Text('Semolowaru, Surabaya',
-                            style: TextStyle(fontSize: 11, color: Colors.white70)),
-                        ],
-                      ),
-                    ),
-                  ),
+                  // Hero Image 
+                Container(
+  height: 200,
+  decoration: BoxDecoration(
+    borderRadius: BorderRadius.circular(16),
+  ),
+  clipBehavior: Clip.hardEdge,
+  child: Stack(
+    fit: StackFit.expand,
+    children: [
+      // Gambar asli
+      Image.asset(
+        'assets/Kelompok_Tani_Elok_Mekar_Sari.jpg',
+        fit: BoxFit.cover,
+      ),
+      // Overlay gelap supaya teks tetap terbaca
+      Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Colors.black.withValues(alpha: 0.3),
+              Colors.black.withValues(alpha: 0.6),
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+      ),
+      // Teks di atas gambar
+      Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            Text(
+              'KELOMPOK TANI\nELOK MEKAR SARI',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                letterSpacing: 1,
+                height: 1.4,
+              ),
+            ),
+            SizedBox(height: 4),
+            Text(
+              'Semolowaru, Surabaya',
+              style: TextStyle(fontSize: 11, color: Colors.white70),
+            ),
+          ],
+        ),
+      ),
                 ],
               ),
             ),
@@ -386,7 +464,12 @@ class HomePage extends StatelessWidget {
                     ),
                   ),
                   TextButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const MarketplacePage()),
+                      );
+                    },
                     child: const Row(
                       children: [
                         Text('Lihat Semua', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: kGreen)),
@@ -406,18 +489,17 @@ class HomePage extends StatelessWidget {
                 height: 220,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(20),
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF4A7C40), Color(0xFF2D5A27)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
                 ),
+                clipBehavior: Clip.hardEdge,
                 child: Stack(
+                  fit: StackFit.expand,
                   children: [
-                    const Center(child: Text('🍄', style: TextStyle(fontSize: 80))),
+                    Image.asset(
+                      'assets/Sate_Jamur_Tiram.jpg',
+                      fit: BoxFit.cover,
+                    ),
                     Container(
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
                         gradient: LinearGradient(
                           colors: [Colors.transparent, Colors.black.withValues(alpha: 0.75)],
                           begin: Alignment.topCenter,
@@ -442,7 +524,12 @@ class HomePage extends StatelessWidget {
                               style: TextStyle(fontSize: 12, color: Colors.white70, height: 1.4)),
                             const SizedBox(height: 14),
                             ElevatedButton(
-                              onPressed: () {},
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => const MarketplacePage()),
+                                );
+                              },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.white,
                                 foregroundColor: kDark,
@@ -468,7 +555,7 @@ class HomePage extends StatelessWidget {
                 crossAxisCount: 2,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
-                childAspectRatio: 0.85,
+                childAspectRatio: 0.75,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 children: products.map((p) => _ProductCard(
@@ -476,6 +563,7 @@ class HomePage extends StatelessWidget {
                   price: p['price']!,
                   cat: p['cat']!,
                   emoji: p['emoji']!,
+                  image: p['image']!,
                 )).toList(),
               ),
             ),
@@ -494,6 +582,7 @@ class HomePage extends StatelessWidget {
                     title: e.value['title']!,
                     desc: e.value['desc']!,
                     emoji: e.value['emoji']!,
+                    image: e.value['image']!,
                     showDivider: e.key < berita.length - 1,
                   )),
                 ],
@@ -564,8 +653,10 @@ class HomePage extends StatelessWidget {
             ),
           ]),
         ),
-      ],
-    );
+      ]),
+    ),
+  ],
+);
   }
 }
 
@@ -723,8 +814,8 @@ class _FeatureItem extends StatelessWidget {
 }
 
 class _ProductCard extends StatelessWidget {
-  final String name, price, cat, emoji;
-  const _ProductCard({required this.name, required this.price, required this.cat, required this.emoji});
+  final String name, price, cat, emoji, image;
+  const _ProductCard({required this.name, required this.price, required this.cat, required this.emoji, required this.image});
 
   @override
   Widget build(BuildContext context) {
@@ -737,13 +828,14 @@ class _ProductCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            height: 110,
-            decoration: BoxDecoration(
-              color: const Color(0xFFEAF2E6),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
+          ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
+            child: Image.asset(
+              image,
+              height: 110,
+              width: double.infinity,
+              fit: BoxFit.cover,
             ),
-            child: Center(child: Text(emoji, style: const TextStyle(fontSize: 40))),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
@@ -771,9 +863,9 @@ class _ProductCard extends StatelessWidget {
 }
 
 class _NewsCard extends StatelessWidget {
-  final String tag, title, desc, emoji;
+  final String tag, title, desc, emoji, image;
   final bool showDivider;
-  const _NewsCard({required this.tag, required this.title, required this.desc, required this.emoji, this.showDivider = true});
+  const _NewsCard({required this.tag, required this.title, required this.desc, required this.emoji, required this.image, this.showDivider = true});
 
   @override
   Widget build(BuildContext context) {
@@ -786,7 +878,14 @@ class _NewsCard extends StatelessWidget {
             color: const Color(0xFFDDE8D8),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Center(child: Text(emoji, style: const TextStyle(fontSize: 48))),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.asset(
+              image,
+              fit: BoxFit.cover,
+              width: double.infinity,
+            ),
+          ),
         ),
         const SizedBox(height: 10),
         Text(tag, style: const TextStyle(fontSize: 11, color: kGreen, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
