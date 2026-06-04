@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'Register_Page.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 const kGreen = Color(0xFF2D5A27);
 const kGreenLight = Color(0xFF4A8C3F);
@@ -47,25 +48,23 @@ class _LoginPageState extends State<LoginPage> {
 
       // Cek role user dari Firestore
       final uid = userCredential.user!.uid;
-      final docSnap = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .get();
+      final docSnap =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
 
       if (!mounted) return;
       setState(() => _isLoading = false);
 
       final role = docSnap.data()?['role'] ?? 'user';
 
-      if (role == 'admin') {
+      if (role == 'umkm') {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Login Admin berhasil!'),
+            content: Text('Login UMKM berhasil!'),
             backgroundColor: kGreen,
           ),
         );
         Navigator.pushNamedAndRemoveUntil(
-            context, '/admin', (route) => false);
+            context, '/umkm_dashboard', (route) => false);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -73,8 +72,7 @@ class _LoginPageState extends State<LoginPage> {
             backgroundColor: kGreen,
           ),
         );
-        Navigator.pushNamedAndRemoveUntil(
-            context, '/home', (route) => false);
+        Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
       }
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
@@ -96,6 +94,96 @@ class _LoginPageState extends State<LoginPage> {
       setState(() => _isLoading = false);
       _showErrorSnackBar('Terjadi kesalahan: $e');
     }
+  }
+
+  // ===== GOOGLE LOGIN =====
+  Future<void> _loginWithGoogle() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+
+      if (googleUser == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+
+      final OAuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      final UserCredential userCredential =
+          await FirebaseAuth.instance.signInWithCredential(credential);
+      final User? user = userCredential.user;
+
+      if (user != null) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        String currentRole = 'user'; // Default role
+
+        if (!userDoc.exists) {
+          // Jika user baru pertama kali login dengan Google, buat dokumen baru
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .set({
+            'uid': user.uid,
+            'name': user.displayName ?? 'Pengguna Google',
+            'email': user.email ?? '',
+            'phone': '',
+            'address': '',
+            'city': '',
+            'role': 'user', // Default sebagai user biasa
+            'joinDate': FieldValue.serverTimestamp(),
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        } else {
+          // Jika sudah ada, ambil role-nya
+          currentRole = userDoc.data()?['role'] ?? 'user';
+        }
+
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+
+        // Arahkan berdasarkan role
+        if (currentRole == 'umkm') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Login Google (UMKM) Berhasil!'),
+              backgroundColor: kGreen,
+            ),
+          );
+          Navigator.pushNamedAndRemoveUntil(
+              context, '/umkm_dashboard', (route) => false);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Login Google Berhasil!'),
+              backgroundColor: kGreen,
+            ),
+          );
+          Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      _showErrorSnackBar('Gagal login Google: $e');
+    }
+  }
+
+  // ===== FACEBOOK LOGIN =====
+  Future<void> _loginWithFacebook() async {
+    // Facebook membutuhkan konfigurasi khusus Meta for Developers dan package flutter_facebook_auth
+    _showErrorSnackBar(
+        'Login Facebook memerlukan konfigurasi Meta for Developers.');
   }
 
   void _showErrorSnackBar(String message) {
@@ -148,14 +236,7 @@ class _LoginPageState extends State<LoginPage> {
                       child: _buildSocialButton(
                         assetPath: 'assets/icons/google.png',
                         label: 'Google',
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                  'Login dengan Google sedang dikembangkan'),
-                            ),
-                          );
-                        },
+                        onTap: _isLoading ? () {} : _loginWithGoogle,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -163,14 +244,7 @@ class _LoginPageState extends State<LoginPage> {
                       child: _buildSocialButton(
                         assetPath: 'assets/icons/facebook.png',
                         label: 'Facebook',
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                  'Login dengan Facebook sedang dikembangkan'),
-                            ),
-                          );
-                        },
+                        onTap: _isLoading ? () {} : _loginWithFacebook,
                       ),
                     ),
                   ],
@@ -267,8 +341,8 @@ class _LoginPageState extends State<LoginPage> {
                                 : Icons.visibility,
                             color: kGray,
                           ),
-                          onPressed: () =>
-                              setState(() => _obscurePassword = !_obscurePassword),
+                          onPressed: () => setState(
+                              () => _obscurePassword = !_obscurePassword),
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -420,9 +494,7 @@ class _LoginPageState extends State<LoginPage> {
             const SizedBox(height: 4),
             Text(label,
                 style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: kDark)),
+                    fontSize: 12, fontWeight: FontWeight.w600, color: kDark)),
           ],
         ),
       ),
