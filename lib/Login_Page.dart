@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'Register_Page.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 const kGreen = Color(0xFF2D5A27);
 const kGreenLight = Color(0xFF4A8C3F);
@@ -38,19 +39,15 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = true);
 
     try {
-      // Login dengan Firebase Auth
       final UserCredential userCredential =
           await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
 
-      // Cek role user dari Firestore
       final uid = userCredential.user!.uid;
-      final docSnap = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .get();
+      final docSnap =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
 
       if (!mounted) return;
       setState(() => _isLoading = false);
@@ -64,8 +61,7 @@ class _LoginPageState extends State<LoginPage> {
             backgroundColor: kGreen,
           ),
         );
-        Navigator.pushNamedAndRemoveUntil(
-            context, '/admin', (route) => false);
+        Navigator.pushNamedAndRemoveUntil(context, '/admin', (route) => false);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -73,8 +69,7 @@ class _LoginPageState extends State<LoginPage> {
             backgroundColor: kGreen,
           ),
         );
-        Navigator.pushNamedAndRemoveUntil(
-            context, '/home', (route) => false);
+        Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
       }
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
@@ -96,6 +91,91 @@ class _LoginPageState extends State<LoginPage> {
       setState(() => _isLoading = false);
       _showErrorSnackBar('Terjadi kesalahan: $e');
     }
+  }
+
+  Future<void> _loginWithGoogle() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+
+      if (googleUser == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+
+      final OAuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      final UserCredential userCredential =
+          await FirebaseAuth.instance.signInWithCredential(credential);
+      final User? user = userCredential.user;
+
+      if (user != null) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        if (!userDoc.exists) {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .set({
+            'uid': user.uid,
+            'name': user.displayName ?? 'Pengguna Google',
+            'email': user.email ?? '',
+            'phone': '',
+            'address': '',
+            'city': '',
+            'role': 'user',
+            'joinDate': FieldValue.serverTimestamp(),
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        }
+
+        final checkRoleDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+        final String role = checkRoleDoc.data()?['role'] ?? 'user';
+
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(role == 'admin'
+                ? 'Login Admin Berhasil!'
+                : 'Login Google Berhasil!'),
+            backgroundColor: kGreen,
+          ),
+        );
+
+        if (role == 'admin') {
+          Navigator.pushNamedAndRemoveUntil(
+              context, '/admin', (route) => false);
+        } else {
+          Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      _showErrorSnackBar('Gagal login Google: $e');
+    }
+  }
+
+  // ===== FACEBOOK LOGIN =====
+  Future<void> _loginWithFacebook() async {
+    // Facebook membutuhkan konfigurasi khusus Meta for Developers dan package flutter_facebook_auth
+    _showErrorSnackBar(
+        'Login Facebook memerlukan konfigurasi Meta for Developers.');
   }
 
   void _showErrorSnackBar(String message) {
@@ -148,14 +228,7 @@ class _LoginPageState extends State<LoginPage> {
                       child: _buildSocialButton(
                         assetPath: 'assets/icons/google.png',
                         label: 'Google',
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                  'Login dengan Google sedang dikembangkan'),
-                            ),
-                          );
-                        },
+                        onTap: _isLoading ? () {} : _loginWithGoogle,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -163,14 +236,7 @@ class _LoginPageState extends State<LoginPage> {
                       child: _buildSocialButton(
                         assetPath: 'assets/icons/facebook.png',
                         label: 'Facebook',
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                  'Login dengan Facebook sedang dikembangkan'),
-                            ),
-                          );
-                        },
+                        onTap: _isLoading ? () {} : _loginWithFacebook,
                       ),
                     ),
                   ],
@@ -267,8 +333,8 @@ class _LoginPageState extends State<LoginPage> {
                                 : Icons.visibility,
                             color: kGray,
                           ),
-                          onPressed: () =>
-                              setState(() => _obscurePassword = !_obscurePassword),
+                          onPressed: () => setState(
+                              () => _obscurePassword = !_obscurePassword),
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -420,9 +486,7 @@ class _LoginPageState extends State<LoginPage> {
             const SizedBox(height: 4),
             Text(label,
                 style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: kDark)),
+                    fontSize: 12, fontWeight: FontWeight.w600, color: kDark)),
           ],
         ),
       ),
