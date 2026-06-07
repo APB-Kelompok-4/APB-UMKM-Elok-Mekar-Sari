@@ -1,13 +1,18 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'Chatbot.dart' as chatbot;
 import 'services/product_service.dart';
 import 'Sistem Keluhan_Feedback.dart';
+import 'package:image_picker/image_picker.dart';
 
 // bagian warna
 const kGreen = Color(0xFF2D5A27);
@@ -389,10 +394,12 @@ class ProductCard extends StatelessWidget {
   const ProductCard({Key? key, required this.product}) : super(key: key);
 
   void _shareProduct(BuildContext context) {
-    final url = 'https://marketplace.app/product/${product.id}';
-    final message =
-        'Cek produk ini: ${product.name}\n${product.description}\nHarga: Rp ${NumberFormat('#,###', 'id_ID').format(product.price)}\n\nLihat detail produk: $url';
-    Share.share(message, subject: 'Bagikan produk UMKM');
+    final harga = NumberFormat('#,###', 'id_ID').format(product.price);
+    final message = '🛍️ *${product.name}*\n'
+        '${product.description}\n\n'
+        '💰 Harga: Rp $harga\n'
+        '📱 Pesan sekarang di aplikasi *Elok Mekar Sari*!';
+    Share.share(message, subject: '${product.name} - Elok Mekar Sari');
   }
 
   @override
@@ -848,36 +855,134 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     );
   }
 
+  // ===== TEKS PESAN PRODUK =====
+  String get _productMessage {
+    final harga = NumberFormat('#,###', 'id_ID').format(widget.product.price);
+    return '🛍️ *${widget.product.name}*\n'
+        '${widget.product.description}\n\n'
+        '💰 Harga: Rp $harga\n'
+        '📦 Stok: ${widget.product.stock} unit\n\n'
+        '📱 Pesan sekarang di aplikasi *Elok Mekar Sari*!';
+  }
+
+  // SHARE umum (native share sheet)
   void _shareProduct() {
-    final url = 'https://marketplace.app/product/${widget.product.id}';
-    final message =
-        'Cek produk ini: ${widget.product.name}\n${widget.product.description}\nHarga: Rp ${NumberFormat('#,###', 'id_ID').format(widget.product.price)}\n\nLihat detail produk: $url';
-    Share.share(message, subject: 'Produk Menarik di Marketplace');
+    Share.share(_productMessage, subject: '${widget.product.name} - Elok Mekar Sari');
   }
 
-  void _shareToFacebook() {
-    final url =
-        'https://www.facebook.com/sharer/sharer.php?u=https://marketplace.app/product/${widget.product.id}&quote=${Uri.encodeComponent(widget.product.name)}';
-    _launchUrl(url);
+  // SHARE ke WhatsApp — buka app WA langsung
+  Future<void> _shareToWhatsApp() async {
+    final text = Uri.encodeComponent(_productMessage);
+    // Coba buka app WhatsApp dulu, fallback ke web
+    final appUrl = Uri.parse('whatsapp://send?text=$text');
+    final webUrl = Uri.parse('https://api.whatsapp.com/send?text=$text');
+    if (await canLaunchUrl(appUrl)) {
+      await launchUrl(appUrl, mode: LaunchMode.externalApplication);
+    } else {
+      await launchUrl(webUrl, mode: LaunchMode.externalApplication);
+    }
   }
 
-  void _shareToInstagram() {
-    final url =
-        'https://www.instagram.com/?url=https://marketplace.app/product/${widget.product.id}';
-    final message =
-        'Cek produk ini: ${widget.product.name}\n${widget.product.description}\nHarga: Rp ${NumberFormat('#,###', 'id_ID').format(widget.product.price)}\n\n$url';
-    Share.share(message, subject: 'Bagikan ke Instagram');
+  // SHARE ke Facebook Messenger — langsung ke chat FB Messenger
+  Future<void> _shareToFacebook() async {
+    // Copy pesan ke clipboard
+    await Clipboard.setData(ClipboardData(text: _productMessage));
+
+    // Deep link ke Facebook Messenger chat baru
+    final messengerUrl = Uri.parse('fb-messenger://compose');
+    // Fallback: buka Messenger via intent
+    final messengerWeb = Uri.parse('https://m.me/');
+
+    if (await canLaunchUrl(messengerUrl)) {
+      await launchUrl(messengerUrl, mode: LaunchMode.externalApplication);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Pesan produk sudah disalin! Paste di chat Facebook Messenger 📋'),
+            backgroundColor: kGreen,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } else {
+      // Fallback: coba buka app Facebook biasa
+      final fbApp = Uri.parse('fb://');
+      if (await canLaunchUrl(fbApp)) {
+        await launchUrl(fbApp, mode: LaunchMode.externalApplication);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Pesan produk sudah disalin! Paste di chat Facebook kamu 📋'),
+              backgroundColor: kGreen,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      } else {
+        await launchUrl(messengerWeb, mode: LaunchMode.externalApplication);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Pesan produk sudah disalin! Paste di chat kamu 📋'),
+              backgroundColor: kGreen,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    }
   }
 
-  void _shareToWhatsApp() {
-    final url =
-        'https://api.whatsapp.com/send?text=${Uri.encodeComponent('Halo! Saya ingin berbagi produk ini dengan Anda 😊\n\n${widget.product.name}\n${widget.product.description}\n\n💰 Harga: Rp ${NumberFormat('#,###', 'id_ID').format(widget.product.price)}\n\nLihat detail: https://marketplace.app/product/${widget.product.id}')}';
-    _launchUrl(url);
+  // SHARE ke Instagram Direct Message — langsung ke halaman chat IG
+  Future<void> _shareToInstagram() async {
+    // Copy pesan ke clipboard dulu
+    await Clipboard.setData(ClipboardData(text: _productMessage));
+
+    // Deep link langsung ke Instagram Direct Message (inbox chat)
+    final igDirect = Uri.parse('instagram://direct-inbox');
+    final igApp    = Uri.parse('instagram://app');
+    final igWeb    = Uri.parse('https://www.instagram.com/direct/inbox/');
+
+    if (await canLaunchUrl(igDirect)) {
+      await launchUrl(igDirect, mode: LaunchMode.externalApplication);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Pesan produk sudah disalin! Paste di chat Instagram kamu 📋'),
+            backgroundColor: kGreen,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } else if (await canLaunchUrl(igApp)) {
+      await launchUrl(igApp, mode: LaunchMode.externalApplication);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Pesan produk sudah disalin! Buka DM Instagram dan paste pesannya 📋'),
+            backgroundColor: kGreen,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } else {
+      await launchUrl(igWeb, mode: LaunchMode.externalApplication);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Pesan produk sudah disalin! Paste di chat Instagram kamu 📋'),
+            backgroundColor: kGreen,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _launchUrl(String url) async {
-    if (await canLaunchUrl(Uri.parse(url))) {
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 }
@@ -1851,66 +1956,643 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
   }
 
-  void _confirmPayment() {
+  // ===== SIMPAN ORDER KE FIRESTORE =====
+  Future<void> _confirmPayment() async {
+    final cartManager = CartManager();
+    final items = cartManager.cartItems.value;
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Silakan login terlebih dahulu'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Tampilkan loading
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('✅ Pesanan Berhasil Dibuat'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Pesanan Anda telah berhasil dibuat! Silakan lakukan pembayaran sesuai dengan metode yang dipilih.',
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(color: kGreen),
+      ),
+    );
+
+    try {
+      final docRef = FirebaseFirestore.instance.collection('orders').doc();
+      final orderId = docRef.id;
+      final now = Timestamp.now();
+
+      final orderItems = items.map((item) => {
+        'productId': item.product.id,
+        'productName': item.product.name,
+        'price': item.product.price,
+        'quantity': item.quantity,
+        'subtotal': item.subtotal,
+      }).toList();
+
+      final paymentName = paymentMethods
+          .firstWhere((m) => m['id'] == _selectedPaymentMethod)['name'];
+
+      await docRef.set({
+        'orderId': orderId,
+        'userId': user.uid,
+        'recipientName': _nameController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'address': '${_addressController.text.trim()}, ${_cityController.text.trim()}, ${_postalCodeController.text.trim()}',
+        'items': orderItems,
+        'totalPrice': cartManager.totalPrice,
+        'paymentMethod': paymentName,
+        'status': 'pending',
+        'statusLabel': 'Menunggu Pembayaran',
+        'statusHistory': [
+          {
+            'status': 'pending',
+            'label': 'Pesanan Dibuat',
+            'timestamp': now,
+          }
+        ],
+        'createdAt': now,
+        'updatedAt': now,
+      });
+
+      if (mounted) Navigator.pop(context); // tutup loading
+
+      cartManager.clearCart();
+
+      // Navigate ke halaman konfirmasi pembayaran sesuai metode
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PaymentConfirmationPage(
+              orderId: orderId,
+              paymentMethod: _selectedPaymentMethod,
+              totalPrice: cartManager.totalPrice == 0
+                  ? orderItems.fold(0.0, (sum, i) => sum + (i['subtotal'] as double))
+                  : cartManager.totalPrice,
+              recipientName: _nameController.text.trim(),
+              address: '${_addressController.text.trim()}, ${_cityController.text.trim()}, ${_postalCodeController.text.trim()}',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal membuat pesanan: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+}
+
+// ========== PAYMENT CONFIRMATION PAGE ==========
+class PaymentConfirmationPage extends StatefulWidget {
+  final String orderId;
+  final String paymentMethod; // 'transfer_bank', 'ewallet', 'cod'
+  final double totalPrice;
+  final String recipientName;
+  final String address;
+
+  const PaymentConfirmationPage({
+    Key? key,
+    required this.orderId,
+    required this.paymentMethod,
+    required this.totalPrice,
+    required this.recipientName,
+    required this.address,
+  }) : super(key: key);
+
+  @override
+  State<PaymentConfirmationPage> createState() => _PaymentConfirmationPageState();
+}
+
+class _PaymentConfirmationPageState extends State<PaymentConfirmationPage> {
+  bool _isConfirming = false;
+  Uint8List? _strukBytes;
+  String?   _strukFileName;
+
+  String get _displayOrderId {
+    final date = DateFormat('yyyyMMdd').format(DateTime.now());
+    return 'EMS-$date-${widget.orderId.substring(0, 4).toUpperCase()}';
+  }
+
+  String get _formattedTotal =>
+      "Rp ${NumberFormat('#,###', 'id_ID').format(widget.totalPrice)}";
+
+  // ===== PILIH GAMBAR STRUK =====
+  Future<void> _pickStruk() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    setState(() {
+      _strukBytes    = bytes;
+      _strukFileName = picked.name;
+    });
+  }
+
+  // ===== UPLOAD STRUK (base64 ke Firestore) & konfirmasi =====
+  Future<void> _konfirmasiSudahBayar() async {
+    if (_strukBytes == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Harap upload foto struk pembayaran terlebih dahulu'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    setState(() => _isConfirming = true);
+    try {
+      final base64Struk = base64Encode(_strukBytes!);
+      await FirebaseFirestore.instance
+          .collection('orders')
+          .doc(widget.orderId)
+          .update({
+        'status': 'diproses',
+        'statusLabel': 'Sedang Diproses',
+        'strukBase64': base64Struk,
+        'strukFileName': _strukFileName ?? 'struk.jpg',
+        'strukUploadedAt': Timestamp.now(),
+        'statusHistory': FieldValue.arrayUnion([
+          {
+            'status': 'diproses',
+            'label': 'Pembayaran Dikonfirmasi + Struk Diunggah',
+            'timestamp': Timestamp.now(),
+          }
+        ]),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      if (mounted) {
+        setState(() => _isConfirming = false);
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => AlertDialog(
+            title: const Text('Pembayaran Terkonfirmasi'),
+            content: const Text(
+              'Struk pembayaran berhasil dikirim. '
+              'Pesanan Anda sedang kami proses dan akan segera dikirim.',
               style: TextStyle(height: 1.6),
             ),
-            const SizedBox(height: 16),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  // Tutup dialog lalu kembali ke root dan set tab ke ORDERS (index 2)
+                  Navigator.pop(context);
+                  // Kembali ke MainPage dan langsung set tab ke ORDERS (index 2)
+                  Navigator.pushNamedAndRemoveUntil(
+                    context,
+                    '/home',
+                    (route) => false,
+                    arguments: {'tab': 2},
+                  );
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: kGreen),
+                child: const Text('Lihat Pesanan Saya',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isConfirming = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal konfirmasi: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  // ===== COD: langsung proses tanpa upload =====
+  Future<void> _konfirmasiCOD() async {
+    setState(() => _isConfirming = true);
+    try {
+      await FirebaseFirestore.instance
+          .collection('orders')
+          .doc(widget.orderId)
+          .update({
+        'status': 'diproses',
+        'statusLabel': 'Sedang Diproses',
+        'statusHistory': FieldValue.arrayUnion([
+          {
+            'status': 'diproses',
+            'label': 'Pesanan Diproses (COD - Bayar di Tempat)',
+            'timestamp': Timestamp.now(),
+          }
+        ]),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      if (mounted) {
+        setState(() => _isConfirming = false);
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => AlertDialog(
+            title: const Text('Pesanan Dikonfirmasi'),
+            content: Text(
+              'Pesanan Anda akan segera diantarkan ke:\n'
+              '${widget.address}\n\n'
+              'Siapkan uang tunai $_formattedTotal saat kurir tiba.',
+              style: const TextStyle(height: 1.6),
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  // Tutup dialog lalu kembali ke root dan set tab ke ORDERS (index 2)
+                  Navigator.pop(context);
+                  Navigator.pushNamedAndRemoveUntil(
+                    context,
+                    '/home',
+                    (route) => false,
+                    arguments: {'tab': 2},
+                  );
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: kGreen),
+                child: const Text('Lihat Pesanan Saya',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isConfirming = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  // ===== WIDGET UPLOAD STRUK =====
+  Widget _buildUploadStruk() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Upload Struk / Bukti Pembayaran',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: kDark)),
+        const SizedBox(height: 10),
+        GestureDetector(
+          onTap: _pickStruk,
+          child: Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(minHeight: 140),
+            decoration: BoxDecoration(
+              color: _strukBytes != null ? Colors.transparent : kGreenPale,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _strukBytes != null ? kGreen : kBorder,
+                width: _strukBytes != null ? 2 : 1,
+              ),
+            ),
+            child: _strukBytes != null
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(11),
+                    child: Stack(
+                      children: [
+                        Image.memory(_strukBytes!, fit: BoxFit.cover,
+                            width: double.infinity),
+                        Positioned(
+                          top: 8, right: 8,
+                          child: GestureDetector(
+                            onTap: _pickStruk,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                  color: kGreen,
+                                  borderRadius: BorderRadius.circular(20)),
+                              child: const Text('Ganti',
+                                  style: TextStyle(color: Colors.white,
+                                      fontSize: 12, fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(height: 28),
+                      Icon(Icons.cloud_upload_outlined, size: 44, color: kGreen),
+                      SizedBox(height: 8),
+                      Text('Ketuk untuk pilih foto struk',
+                          style: TextStyle(color: kGreen, fontWeight: FontWeight.w600)),
+                      SizedBox(height: 4),
+                      Text('Format: JPG, PNG',
+                          style: TextStyle(color: kGray, fontSize: 12)),
+                      SizedBox(height: 28),
+                    ],
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      appBar: AppBar(
+        title: const Text('Konfirmasi Pembayaran',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor: kGreen,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header order
             Container(
-              padding: const EdgeInsets.all(12),
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: kGreenPale,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: kGreen.withOpacity(0.3)),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'ID Pesanan: ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(0, 8)}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: kGreen,
-                    ),
-                  ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  const Icon(Icons.receipt_long, color: kGreen, size: 20),
+                  const SizedBox(width: 8),
+                  Text(_displayOrderId,
+                      style: const TextStyle(fontWeight: FontWeight.bold,
+                          color: kGreen, fontSize: 15)),
+                ]),
+                const SizedBox(height: 8),
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  const Text('Total Pembayaran',
+                      style: TextStyle(color: kGray, fontSize: 13)),
+                  Text(_formattedTotal,
+                      style: const TextStyle(fontWeight: FontWeight.bold,
+                          color: kDark, fontSize: 18)),
+                ]),
+              ]),
+            ),
+            const SizedBox(height: 20),
+
+            // ===== TRANSFER BANK =====
+            if (widget.paymentMethod == 'transfer_bank') ...[
+              _buildSectionTitle('Transfer Bank'),
+              const SizedBox(height: 12),
+              _buildBankCard(bankName: 'BCA', accountNumber: '1234567890',
+                  accountName: 'Elok Mekar Sari', logo: Icons.account_balance),
+              const SizedBox(height: 10),
+              _buildBankCard(bankName: 'BRI', accountNumber: '0987654321',
+                  accountName: 'Elok Mekar Sari', logo: Icons.account_balance),
+              const SizedBox(height: 10),
+              _buildBankCard(bankName: 'Mandiri', accountNumber: '1122334455',
+                  accountName: 'Elok Mekar Sari', logo: Icons.account_balance),
+              const SizedBox(height: 16),
+              _buildInfoBox(icon: Icons.info_outline, color: Colors.orange,
+                  text: 'Transfer tepat sebesar $_formattedTotal. '
+                      'Lalu upload foto struk/bukti transfer di bawah.'),
+              const SizedBox(height: 20),
+              _buildUploadStruk(),
+              const SizedBox(height: 20),
+              _buildConfirmButton(),
+            ],
+
+            // ===== E-WALLET =====
+            if (widget.paymentMethod == 'ewallet') ...[
+              _buildSectionTitle('Pembayaran E-Wallet'),
+              const SizedBox(height: 12),
+              _buildEwalletCard(name: 'GoPay', number: '0895-3013-2581',
+                  owner: 'Elok Mekar Sari', color: const Color(0xFF00AED6)),
+              const SizedBox(height: 10),
+              _buildEwalletCard(name: 'OVO', number: '0895-3013-2581',
+                  owner: 'Elok Mekar Sari', color: const Color(0xFF4C3494)),
+              const SizedBox(height: 10),
+              _buildEwalletCard(name: 'DANA', number: '0895-3013-2581',
+                  owner: 'Elok Mekar Sari', color: const Color(0xFF118EEA)),
+              const SizedBox(height: 16),
+              _buildInfoBox(icon: Icons.info_outline, color: Colors.blue,
+                  text: 'Transfer tepat sebesar $_formattedTotal ke salah satu e-wallet. '
+                      'Lalu upload screenshot bukti transfer di bawah.'),
+              const SizedBox(height: 20),
+              _buildUploadStruk(),
+              const SizedBox(height: 20),
+              _buildConfirmButton(),
+            ],
+
+            // ===== COD =====
+            if (widget.paymentMethod == 'cod') ...[
+              _buildSectionTitle('Bayar di Tempat (COD)'),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: kBorder)),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Row(children: [
+                    Icon(Icons.local_shipping, color: kGreen, size: 22),
+                    SizedBox(width: 8),
+                    Text('Detail Pengiriman',
+                        style: TextStyle(fontWeight: FontWeight.bold,
+                            fontSize: 14, color: kDark)),
+                  ]),
+                  const SizedBox(height: 12),
+                  _buildDetailRow('Penerima', widget.recipientName),
                   const SizedBox(height: 8),
-                  Text(
-                    'Status: Menunggu Pembayaran',
-                    style: TextStyle(
-                      color: kGreen,
-                      fontSize: 12,
-                    ),
+                  _buildDetailRow('Alamat Tujuan', widget.address),
+                  const SizedBox(height: 8),
+                  _buildDetailRow('Jumlah Tunai', _formattedTotal),
+                ]),
+              ),
+              const SizedBox(height: 16),
+              _buildInfoBox(icon: Icons.check_circle_outline, color: kGreen,
+                  text: 'Siapkan uang tunai sebesar $_formattedTotal saat kurir tiba '
+                      'di alamat tujuan Anda. Pesanan akan langsung diproses.'),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _isConfirming ? null : _konfirmasiCOD,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kGreen,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
-                ],
+                  icon: _isConfirming
+                      ? const SizedBox(width: 18, height: 18,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2))
+                      : const Icon(Icons.check, color: Colors.white),
+                  label: const Text('OK, Pesanan Dikonfirmasi',
+                      style: TextStyle(color: Colors.white,
+                          fontWeight: FontWeight.bold, fontSize: 16)),
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () =>
+                    Navigator.popUntil(context, (route) => route.isFirst),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: kGreen),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                icon: const Icon(Icons.receipt_long_outlined, color: kGreen),
+                label: const Text('Lihat Riwayat Pesanan',
+                    style: TextStyle(color: kGreen, fontWeight: FontWeight.bold)),
               ),
             ),
+            const SizedBox(height: 24),
           ],
         ),
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              CartManager().clearCart();
-              Navigator.popUntil(context, (route) => route.isFirst);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: kGreen,
-            ),
-            child: const Text('Kembali ke Home'),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) => Text(title,
+      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: kDark));
+
+  Widget _buildBankCard({required String bankName, required String accountNumber,
+      required String accountName, required IconData logo}) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white,
+          borderRadius: BorderRadius.circular(12), border: Border.all(color: kBorder)),
+      child: Row(children: [
+        Container(width: 44, height: 44,
+            decoration: BoxDecoration(color: kGreenPale,
+                borderRadius: BorderRadius.circular(10)),
+            child: Icon(logo, color: kGreen, size: 22)),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(bankName, style: const TextStyle(fontWeight: FontWeight.bold,
+              fontSize: 14, color: kDark)),
+          Text(accountNumber, style: const TextStyle(fontSize: 16,
+              fontWeight: FontWeight.w700, letterSpacing: 1, color: kGreen)),
+          Text('a/n $accountName',
+              style: const TextStyle(fontSize: 12, color: kGray)),
+        ])),
+        GestureDetector(
+          onTap: () => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Nomor rekening $bankName disalin'),
+              backgroundColor: kGreen, duration: const Duration(seconds: 1))),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(color: kGreenPale,
+                borderRadius: BorderRadius.circular(8)),
+            child: const Text('Salin', style: TextStyle(color: kGreen,
+                fontSize: 12, fontWeight: FontWeight.bold)),
           ),
-        ],
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildEwalletCard({required String name, required String number,
+      required String owner, required Color color}) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white,
+          borderRadius: BorderRadius.circular(12), border: Border.all(color: kBorder)),
+      child: Row(children: [
+        Container(width: 44, height: 44,
+            decoration: BoxDecoration(color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10)),
+            child: Center(child: Text(name[0], style: TextStyle(color: color,
+                fontWeight: FontWeight.bold, fontSize: 20)))),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(name, style: const TextStyle(fontWeight: FontWeight.bold,
+              fontSize: 14, color: kDark)),
+          Text(number, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
+              letterSpacing: 1, color: color)),
+          Text('a/n $owner', style: const TextStyle(fontSize: 12, color: kGray)),
+        ])),
+        GestureDetector(
+          onTap: () => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Nomor $name disalin'),
+              backgroundColor: kGreen, duration: const Duration(seconds: 1))),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8)),
+            child: Text('Salin', style: TextStyle(color: color, fontSize: 12,
+                fontWeight: FontWeight.bold)),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildInfoBox({required IconData icon, required Color color, required String text}) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withOpacity(0.3))),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, color: color, size: 20),
+        const SizedBox(width: 10),
+        Expanded(child: Text(text,
+            style: TextStyle(fontSize: 13, color: color, height: 1.5))),
+      ]),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      SizedBox(width: 110,
+          child: Text(label, style: const TextStyle(fontSize: 13, color: kGray))),
+      const Text(': ', style: TextStyle(fontSize: 13, color: kGray)),
+      Expanded(child: Text(value, style: const TextStyle(fontSize: 13,
+          color: kDark, fontWeight: FontWeight.w600))),
+    ]);
+  }
+
+  Widget _buildConfirmButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: _isConfirming ? null : _konfirmasiSudahBayar,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: kGreen,
+          disabledBackgroundColor: kGreen.withOpacity(0.5),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        icon: _isConfirming
+            ? const SizedBox(width: 18, height: 18,
+                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+            : const Icon(Icons.check_circle, color: Colors.white),
+        label: const Text('Konfirmasi Sudah Bayar',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold,
+                fontSize: 16)),
       ),
     );
   }
 }
+
 
 // = ORDER TRACKING PAGE=
 class OrderTrackingPage extends StatefulWidget {
@@ -1921,91 +2603,593 @@ class OrderTrackingPage extends StatefulWidget {
 }
 
 class _OrderTrackingPageState extends State<OrderTrackingPage> {
-  // Sample order data
-  final List<Order> orders = [
-    Order(
-      orderId: 'ORD-2024-001',
-      productName: 'Nugget Lele',
-      quantity: 2,
-      totalPrice: 50000,
-      status: OrderStatus.delivered,
-      orderDate: DateTime(2024, 4, 1),
-      estimatedDelivery: DateTime(2024, 4, 4),
-      paymentMethod: 'Transfer Bank',
-    ),
-    Order(
-      orderId: 'ORD-2024-002',
-      productName: 'Sempol Jamur',
-      quantity: 3,
-      totalPrice: 54000,
-      status: OrderStatus.outForDelivery,
-      orderDate: DateTime(2024, 4, 5),
-      estimatedDelivery: DateTime(2024, 4, 8),
-      paymentMethod: 'E-Wallet',
-    ),
-    Order(
-      orderId: 'ORD-2024-003',
-      productName: 'Tahu Walik',
-      quantity: 4,
-      totalPrice: 44000,
-      status: OrderStatus.shipped,
-      orderDate: DateTime(2024, 4, 8),
-      estimatedDelivery: DateTime(2024, 4, 12),
-      paymentMethod: 'Transfer Bank',
-    ),
-    Order(
-      orderId: 'ORD-2024-004',
-      productName: 'Jamu Sinom Jamur Tiram',
-      quantity: 1,
-      totalPrice: 15000,
-      status: OrderStatus.processing,
-      orderDate: DateTime(2024, 4, 10),
-      estimatedDelivery: DateTime(2024, 4, 14),
-      paymentMethod: 'Ovo',
-    ),
-  ];
+
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'pending':       return 'Menunggu Pembayaran';
+      case 'diproses':      return 'Sedang Diproses';
+      case 'dikirim':       return 'Dalam Pengiriman';
+      case 'selesai':       return 'Selesai';
+      case 'dibatalkan':    return 'Dibatalkan';
+      default:              return status;
+    }
+  }
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'pending':       return Colors.orange;
+      case 'diproses':      return Colors.blue;
+      case 'dikirim':       return Colors.purple;
+      case 'selesai':       return kGreen;
+      case 'dibatalkan':    return Colors.red;
+      default:              return kGray;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text(
           'Lacak Pesanan',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         backgroundColor: kGreen,
         actions: [
-          // Chat Icon
           IconButton(
-            icon: const Icon(
-              Icons.message,
-              color: Colors.white,
-              size: 26,
-            ),
+            icon: const Icon(Icons.message, color: Colors.white, size: 26),
             tooltip: 'Chat dengan Asisten',
             onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (context) => const chatbot.ChatbotPage()),
-              );
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (context) => const chatbot.ChatbotPage()));
             },
           ),
         ],
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(12),
-        itemCount: orders.length,
-        itemBuilder: (context, index) {
-          return OrderCard(order: orders[index]);
+      body: uid == null
+          ? const Center(child: Text('Silakan login terlebih dahulu'))
+          : StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('orders')
+                  .where('userId', isEqualTo: uid)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator(color: kGreen));
+                }
+                if (snapshot.hasError) {
+                  return Center(child: Text('Error: ${snapshot.error}'));
+                }
+
+                final docs = List.from(snapshot.data?.docs ?? [])
+                  ..sort((a, b) {
+                    final aTs = (a.data() as Map)['createdAt'] as Timestamp?;
+                    final bTs = (b.data() as Map)['createdAt'] as Timestamp?;
+                    if (aTs == null || bTs == null) return 0;
+                    return bTs.compareTo(aTs);
+                  });
+
+                if (docs.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.receipt_long_outlined, size: 80, color: kBorder),
+                        const SizedBox(height: 16),
+                        const Text('Belum Ada Pesanan',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kDark)),
+                        const SizedBox(height: 8),
+                        Text('Pesanan Anda akan muncul di sini',
+                            style: TextStyle(fontSize: 14, color: kGray)),
+                      ],
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: docs.length,
+                  itemBuilder: (context, index) {
+                    final data = docs[index].data() as Map<String, dynamic>;
+                    final status = data['status'] ?? 'pending';
+                    final items = (data['items'] as List<dynamic>?) ?? [];
+                    final productNames = items
+                        .map((e) => "${e['productName']} x${e['quantity']}")
+                        .join(', ');
+                    final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
+                    final dateStr = createdAt != null
+                        ? DateFormat('dd MMM yyyy, HH:mm', 'id_ID').format(createdAt)
+                        : '-';
+
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.push(context, MaterialPageRoute(
+                          builder: (_) => FirebaseOrderDetailPage(orderData: data),
+                        ));
+                      },
+                      child: Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    "ID: ${(data['orderId'] as String).substring(0, 12).toUpperCase()}",
+                                    style: const TextStyle(fontSize: 12, color: kGray, fontWeight: FontWeight.w500),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: _statusColor(status).withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      _statusLabel(status),
+                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _statusColor(status)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                productNames.isEmpty ? 'Produk tidak tersedia' : productNames,
+                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: kDark),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(dateStr, style: const TextStyle(fontSize: 12, color: kGray)),
+                                  Text(
+                                    "Rp ${NumberFormat('#,###', 'id_ID').format(data['totalPrice'] ?? 0)}",
+                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: kGreen),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+    );
+  }
+}
+
+// ===== DETAIL PESANAN DARI FIREBASE (Realtime StreamBuilder) =====
+class FirebaseOrderDetailPage extends StatefulWidget {
+  final Map<String, dynamic> orderData;
+  const FirebaseOrderDetailPage({Key? key, required this.orderData}) : super(key: key);
+
+  @override
+  State<FirebaseOrderDetailPage> createState() => _FirebaseOrderDetailPageState();
+}
+
+class _FirebaseOrderDetailPageState extends State<FirebaseOrderDetailPage> {
+  bool _isConfirming = false;
+
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'pending':    return 'Menunggu Pembayaran';
+      case 'diproses':   return 'Sedang Diproses';
+      case 'dikirim':    return 'Dalam Pengiriman';
+      case 'selesai':    return 'Selesai';
+      case 'dibatalkan': return 'Dibatalkan';
+      default:           return status;
+    }
+  }
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'pending':    return Colors.orange;
+      case 'diproses':   return Colors.blue;
+      case 'dikirim':    return Colors.purple;
+      case 'selesai':    return kGreen;
+      case 'dibatalkan': return Colors.red;
+      default:           return kGray;
+    }
+  }
+
+  String _formattedTotal(double total) =>
+      "Rp ${NumberFormat('#,###', 'id_ID').format(total)}";
+
+  Future<void> _konfirmasiSudahBayar(String orderId, double total) async {
+    setState(() => _isConfirming = true);
+    try {
+      await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
+        'status': 'diproses',
+        'statusLabel': 'Sedang Diproses',
+        'statusHistory': FieldValue.arrayUnion([
+          {
+            'status': 'diproses',
+            'label': 'Pembayaran Dikonfirmasi',
+            'timestamp': Timestamp.now(),
+          }
+        ]),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      if (mounted) {
+        setState(() => _isConfirming = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Pembayaran dikonfirmasi! Pesanan sedang diproses.'),
+            backgroundColor: kGreen,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isConfirming = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Ambil orderId dari data awal untuk stream
+    final rawOrderId = widget.orderData['orderId'] as String? ?? '';
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'Detail Pesanan',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: kGreen,
+        elevation: 0,
+      ),
+      // StreamBuilder agar status update realtime tanpa reload
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('orders')
+            .doc(rawOrderId)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(color: kGreen));
+          }
+          if (!snapshot.hasData || !snapshot.data!.exists) {
+            return const Center(child: Text('Pesanan tidak ditemukan'));
+          }
+
+          // Gunakan data realtime dari Firestore
+          final data = snapshot.data!.data() as Map<String, dynamic>;
+          final items = (data['items'] as List<dynamic>?) ?? [];
+          final statusHistory = (data['statusHistory'] as List<dynamic>?) ?? [];
+          final status = data['status'] ?? 'pending';
+          final paymentMethod = data['paymentMethod'] ?? '';
+          final totalPrice = (data['totalPrice'] ?? 0).toDouble();
+          final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
+          final dateStr = createdAt != null
+              ? DateFormat('dd MMMM yyyy, HH:mm', 'id_ID').format(createdAt)
+              : '-';
+          final orderId = data['orderId'] as String? ?? rawOrderId;
+          final displayId = orderId.length >= 12
+              ? orderId.substring(0, 12).toUpperCase()
+              : orderId.toUpperCase();
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+
+                // ===== STATUS BANNER =====
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: _statusColor(status).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _statusColor(status).withOpacity(0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'ID: $displayId',
+                    style: const TextStyle(fontSize: 12, color: kGray),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: _statusColor(status),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _statusLabel(status),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: _statusColor(status),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(dateStr, style: const TextStyle(fontSize: 12, color: kGray)),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Metode: $paymentMethod',
+                    style: const TextStyle(fontSize: 12, color: kGray),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ===== KONFIRMASI PEMBAYARAN (hanya muncul jika status masih pending) =====
+            if (status == 'pending') ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange.withOpacity(0.4)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.info_outline, color: Colors.orange, size: 18),
+                        SizedBox(width: 8),
+                        Text(
+                          'Menunggu Konfirmasi Pembayaran',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    // Pesan berbeda per metode pembayaran
+                    if (paymentMethod.toLowerCase().contains('transfer') ||
+                        paymentMethod.toLowerCase().contains('bank'))
+                      Text(
+                        'Silakan transfer ${_formattedTotal(totalPrice)} ke rekening Elok Mekar Sari. '
+                        'Setelah transfer, klik tombol konfirmasi di bawah.',
+                        style: const TextStyle(fontSize: 12, color: kGray, height: 1.5),
+                      )
+                    else if (paymentMethod.toLowerCase().contains('wallet') ||
+                        paymentMethod.toLowerCase().contains('gopay') ||
+                        paymentMethod.toLowerCase().contains('ovo') ||
+                        paymentMethod.toLowerCase().contains('dana'))
+                      Text(
+                        'Silakan transfer ${_formattedTotal(totalPrice)} ke e-wallet Elok Mekar Sari. '
+                        'Setelah transfer, klik tombol konfirmasi di bawah.',
+                        style: const TextStyle(fontSize: 12, color: kGray, height: 1.5),
+                      )
+                    else
+                      Text(
+                        'Pesanan COD Anda akan segera diantarkan. '
+                        'Siapkan uang tunai ${_formattedTotal(totalPrice)} saat kurir tiba.',
+                        style: const TextStyle(fontSize: 12, color: kGray, height: 1.5),
+                      ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _isConfirming ? null : () => _konfirmasiSudahBayar(orderId, totalPrice),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: kGreen,
+                          disabledBackgroundColor: kGreen.withOpacity(0.5),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                        ),
+                        icon: _isConfirming
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                    color: Colors.white, strokeWidth: 2))
+                            : const Icon(Icons.check_circle, color: Colors.white, size: 18),
+                        label: Text(
+                          paymentMethod.toLowerCase().contains('cod')
+                              ? 'Konfirmasi Pesanan COD'
+                              : 'Konfirmasi Sudah Bayar',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // ===== PRODUK YANG DIPESAN =====
+            const Text('Produk yang Dipesan',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: kDark)),
+            const SizedBox(height: 8),
+            ...items.map((item) => Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: kBorder),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(item['productName'] ?? '',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 13)),
+                        Text(
+                          'Rp ${NumberFormat('#,###', 'id_ID').format(item['price'] ?? 0)} x ${item['quantity']}',
+                          style: const TextStyle(fontSize: 12, color: kGray),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    'Rp ${NumberFormat('#,###', 'id_ID').format(item['subtotal'] ?? 0)}',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, color: kGreen, fontSize: 13),
+                  ),
+                ],
+              ),
+            )).toList(),
+            const SizedBox(height: 8),
+
+            // ===== TOTAL =====
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: kGreen,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Total Pembayaran',
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold)),
+                  Text(
+                    _formattedTotal(totalPrice),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ===== ALAMAT PENGIRIMAN =====
+            const Text('Alamat Pengiriman',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 15, color: kDark)),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: kBorder),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(data['recipientName'] ?? '-',
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Text(data['phone'] ?? '-',
+                      style: const TextStyle(color: kGray, fontSize: 13)),
+                  const SizedBox(height: 4),
+                  Text(data['address'] ?? '-',
+                      style: const TextStyle(color: kGray, fontSize: 13)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ===== RIWAYAT STATUS =====
+            if (statusHistory.isNotEmpty) ...[
+              const Text('Riwayat Status',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 15, color: kDark)),
+              const SizedBox(height: 8),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: kBorder),
+                ),
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  children: statusHistory.reversed.map<Widget>((h) {
+                    final ts = (h['timestamp'] as Timestamp?)?.toDate();
+                    final tsStr = ts != null
+                        ? DateFormat('dd MMM yyyy, HH:mm', 'id_ID').format(ts)
+                        : '-';
+                    final hStatus = h['status'] ?? 'pending';
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: _statusColor(hStatus).withOpacity(0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.check_circle,
+                              color: _statusColor(hStatus),
+                              size: 18,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(h['label'] ?? '',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13)),
+                                Text(tsStr,
+                                    style: const TextStyle(
+                                        fontSize: 11, color: kGray)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+                const SizedBox(height: 24),
+              ],
+            ),
+          );
         },
       ),
     );
   }
 }
+
 
 // ORDER CARD
 class OrderCard extends StatelessWidget {

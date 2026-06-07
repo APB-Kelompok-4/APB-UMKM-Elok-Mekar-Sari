@@ -1,9 +1,12 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import 'models/complaint.dart';
 import 'services/complaint_service.dart';
 import 'services/product_service.dart';
@@ -1151,7 +1154,7 @@ class _ProductManagementTabState extends State<ProductManagementTab> {
   }
 }
 
-// ========== ORDER MANAGEMENT TAB ==========
+// ========== ORDER MANAGEMENT TAB (FIREBASE) ==========
 class OrderManagementTab extends StatefulWidget {
   const OrderManagementTab({Key? key}) : super(key: key);
 
@@ -1161,51 +1164,70 @@ class OrderManagementTab extends StatefulWidget {
 
 class _OrderManagementTabState extends State<OrderManagementTab> {
   String _selectedStatus = 'Semua';
-  final List<String> _statusOptions = [
-    'Semua',
-    'Dikemas',
-    'Dikirim',
-    'Selesai',
-  ];
+  final List<String> _statusOptions = ['Semua', 'pending', 'diproses', 'dikirim', 'selesai', 'dibatalkan'];
 
-  final List<Map<String, dynamic>> _orders = [
-    {
-      'id': '001',
-      'customer': 'John Doe',
-      'status': 'Dikemas',
-      'total': 50000,
-      'date': '2024-01-15',
-      'items': ['Nasi Gudeg x2'],
-    },
-    {
-      'id': '002',
-      'customer': 'Jane Smith',
-      'status': 'Dikirim',
-      'total': 75000,
-      'date': '2024-01-14',
-      'items': ['Keripik Tempe x3', 'Nasi Gudeg x1'],
-    },
-    {
-      'id': '003',
-      'customer': 'Bob Johnson',
-      'status': 'Selesai',
-      'total': 30000,
-      'date': '2024-01-13',
-      'items': ['Batik Jogja x1'],
-    },
-  ];
-
-  List<Map<String, dynamic>> get _filteredOrders {
-    if (_selectedStatus == 'Semua') return _orders;
-    return _orders
-        .where((order) => order['status'] == _selectedStatus)
-        .toList();
+  // Label tampilan untuk setiap status
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'pending':     return 'Menunggu Pembayaran';
+      case 'diproses':    return 'Sedang Diproses';
+      case 'dikirim':     return 'Dalam Pengiriman';
+      case 'selesai':     return 'Selesai';
+      case 'dibatalkan':  return 'Dibatalkan';
+      default:            return status;
+    }
   }
 
-  void _updateOrderStatus(int index, String newStatus) {
-    setState(() {
-      _orders[index]['status'] = newStatus;
-    });
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'pending':     return Colors.orange;
+      case 'diproses':    return Colors.blue;
+      case 'dikirim':     return Colors.purple;
+      case 'selesai':     return kGreen;
+      case 'dibatalkan':  return Colors.red;
+      default:            return kGray;
+    }
+  }
+
+  // Format nomor order: EMS-YYYYMMDD-XXXX
+  String _formatOrderId(String rawId) {
+    final short = rawId.substring(0, 4).toUpperCase();
+    final now = DateTime.now();
+    final date = '${now.year}${now.month.toString().padLeft(2,'0')}${now.day.toString().padLeft(2,'0')}';
+    return 'EMS-$date-$short';
+  }
+
+  // Admin update status pesanan
+  Future<void> _updateStatus(String orderId, String newStatus) async {
+    final label = _statusLabel(newStatus);
+    try {
+      await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
+        'status': newStatus,
+        'statusLabel': label,
+        'statusHistory': FieldValue.arrayUnion([
+          {
+            'status': newStatus,
+            'label': label,
+            'timestamp': Timestamp.now(),
+          }
+        ]),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Status diperbarui: $label'),
+            backgroundColor: kGreen,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal update: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   @override
@@ -1213,95 +1235,283 @@ class _OrderManagementTabState extends State<OrderManagementTab> {
     return Scaffold(
       body: Column(
         children: [
-          // Filter
+          // Filter dropdown
           Padding(
             padding: const EdgeInsets.all(16),
             child: DropdownButtonFormField<String>(
-              initialValue: _selectedStatus,
-              items: _statusOptions.map((status) {
-                return DropdownMenuItem(value: status, child: Text(status));
-              }).toList(),
-              onChanged: (value) {
-                setState(() => _selectedStatus = value!);
-              },
+              value: _selectedStatus,
+              items: _statusOptions.map((s) => DropdownMenuItem(
+                value: s,
+                child: Text(s == 'Semua' ? 'Semua Pesanan' : _statusLabel(s)),
+              )).toList(),
+              onChanged: (v) => setState(() => _selectedStatus = v!),
               decoration: InputDecoration(
                 labelText: 'Filter Status',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               ),
             ),
           ),
 
-          // Orders List
+          // Realtime order list dari Firestore
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _filteredOrders.length,
-              itemBuilder: (context, index) {
-                final order = _filteredOrders[index];
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  child: ExpansionTile(
-                    title: Text('Order #${order['id']} - ${order['customer']}'),
-                    subtitle: Text(
-                      'Total: Rp ${order['total']} • ${order['date']}',
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('orders')
+                  .snapshots(), // tanpa orderBy — tidak butuh index
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator(color: kGreen));
+                }
+                if (snapshot.hasError) {
+                  return Center(child: Text('Error: ${snapshot.error}'));
+                }
+
+                // Sort di Flutter: terbaru di atas
+                var docs = List.from(snapshot.data?.docs ?? [])
+                  ..sort((a, b) {
+                    final aTs = (a.data() as Map)['createdAt'] as Timestamp?;
+                    final bTs = (b.data() as Map)['createdAt'] as Timestamp?;
+                    if (aTs == null || bTs == null) return 0;
+                    return bTs.compareTo(aTs);
+                  });
+
+                // Filter by status
+                if (_selectedStatus != 'Semua') {
+                  docs = docs.where((d) {
+                    final data = d.data() as Map<String, dynamic>;
+                    return data['status'] == _selectedStatus;
+                  }).toList();
+                }
+
+                if (docs.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.receipt_long_outlined, size: 64, color: kBorder),
+                        const SizedBox(height: 12),
+                        Text(
+                          _selectedStatus == 'Semua'
+                              ? 'Belum ada pesanan masuk'
+                              : 'Tidak ada pesanan ${_statusLabel(_selectedStatus)}',
+                          style: const TextStyle(color: kGray, fontSize: 14),
+                        ),
+                      ],
                     ),
-                    trailing: Text(
-                      order['status'],
-                      style: TextStyle(
-                        color: _getStatusColor(order['status']),
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
+                  );
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: docs.length,
+                  itemBuilder: (context, index) {
+                    final data = docs[index].data() as Map<String, dynamic>;
+                    final rawId = data['orderId'] as String? ?? docs[index].id;
+                    final status = data['status'] ?? 'pending';
+                    final items = (data['items'] as List<dynamic>?) ?? [];
+                    final productNames = items
+                        .map((e) => '${e['productName']} x${e['quantity']}')
+                        .join(', ');
+                    final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
+                    final dateStr = createdAt != null
+                        ? DateFormat('dd MMM yyyy, HH:mm', 'id_ID').format(createdAt)
+                        : '-';
+
+                    // Format nomor order yang rapi
+                    String displayOrderId;
+                    if (createdAt != null) {
+                      final date = DateFormat('yyyyMMdd').format(createdAt);
+                      displayOrderId = 'EMS-$date-${rawId.substring(0,4).toUpperCase()}';
+                    } else {
+                      displayOrderId = 'EMS-${rawId.substring(0,8).toUpperCase()}';
+                    }
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      child: ExpansionTile(
+                        title: Text(
+                          displayOrderId,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Items: ${order['items'].join(', ')}'),
-                            const SizedBox(height: 8),
-                            const Text('Update Status:'),
-                            const SizedBox(height: 4),
-                            Wrap(
-                              spacing: 8,
-                              children: ['Dikemas', 'Dikirim', 'Selesai'].map((
-                                status,
-                              ) {
-                                final bool isSelected = order['status'] == status;
-                                final Color buttonColor = isSelected
-                                    ? kGray
-                                    : _getStatusColor(status);
-                                return ElevatedButton(
-                                  onPressed: isSelected
-                                      ? null
-                                      : () => _updateOrderStatus(
-                                          _orders.indexWhere(
-                                            (o) => o['id'] == order['id'],
-                                          ),
-                                          status,
-                                        ),
-                                  style: ButtonStyle(
-                                    backgroundColor:
-                                        WidgetStateProperty.all(buttonColor),
-                                    foregroundColor:
-                                        WidgetStateProperty.all(Colors.black),
-                                    textStyle: WidgetStateProperty.all(
-                                      const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                  child: Text(status),
-                                );
-                              }).toList(),
+                            Text(
+                              data['recipientName'] ?? '-',
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                            Text(
+                              'Rp ${NumberFormat('#,###', 'id_ID').format(data['totalPrice'] ?? 0)} • $dateStr',
+                              style: const TextStyle(fontSize: 12, color: kGray),
                             ),
                           ],
                         ),
+                        trailing: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: _statusColor(status).withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            _statusLabel(status),
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: _statusColor(status),
+                            ),
+                          ),
+                        ),
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Divider(),
+                                // Produk
+                                Text('Produk: $productNames',
+                                    style: const TextStyle(fontSize: 13)),
+                                const SizedBox(height: 4),
+                                // Alamat
+                                Text('Alamat: ${data['address'] ?? '-'}',
+                                    style: const TextStyle(fontSize: 13, color: kGray)),
+                                const SizedBox(height: 4),
+                                Text('Pembayaran: ${data['paymentMethod'] ?? '-'}',
+                                    style: const TextStyle(fontSize: 13, color: kGray)),
+                                const SizedBox(height: 12),
+
+                                // ===== STRUK PEMBAYARAN =====
+                                if (data['strukBase64'] != null && (data['strukBase64'] as String).isNotEmpty) ...[
+                                  const Text('Bukti Pembayaran:',
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                  const SizedBox(height: 8),
+                                  GestureDetector(
+                                    onTap: () {
+                                      // Buka gambar full screen
+                                      showDialog(
+                                        context: context,
+                                        builder: (_) => Dialog(
+                                          backgroundColor: Colors.black,
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              AppBar(
+                                                backgroundColor: Colors.black,
+                                                leading: IconButton(
+                                                  icon: const Icon(Icons.close, color: Colors.white),
+                                                  onPressed: () => Navigator.pop(context),
+                                                ),
+                                                title: const Text('Struk Pembayaran',
+                                                    style: TextStyle(color: Colors.white, fontSize: 14)),
+                                              ),
+                                              InteractiveViewer(
+                                                child: Image.memory(
+                                                  base64Decode(data['strukBase64'] as String),
+                                                  fit: BoxFit.contain,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    child: Container(
+                                      height: 180,
+                                      width: double.infinity,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: kBorder),
+                                        color: kGreenPale,
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(10),
+                                        child: Stack(
+                                          fit: StackFit.expand,
+                                          children: [
+                                            Image.memory(
+                                              base64Decode(data['strukBase64'] as String),
+                                              fit: BoxFit.cover,
+                                            ),
+                                            Positioned(
+                                              bottom: 0, left: 0, right: 0,
+                                              child: Container(
+                                                color: Colors.black.withOpacity(0.5),
+                                                padding: const EdgeInsets.symmetric(vertical: 6),
+                                                child: const Row(
+                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  children: [
+                                                    Icon(Icons.zoom_in, color: Colors.white, size: 16),
+                                                    SizedBox(width: 4),
+                                                    Text('Ketuk untuk perbesar',
+                                                        style: TextStyle(color: Colors.white, fontSize: 12)),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  if (data['strukUploadedAt'] != null)
+                                    Text(
+                                      'Diunggah: ${DateFormat('dd MMM yyyy, HH:mm', 'id_ID').format((data['strukUploadedAt'] as Timestamp).toDate())}',
+                                      style: const TextStyle(fontSize: 11, color: kGray),
+                                    ),
+                                  const SizedBox(height: 12),
+                                ] else if (data['paymentMethod'] != null &&
+                                    !(data['paymentMethod'] as String).toLowerCase().contains('cod')) ...[
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                                    ),
+                                    child: const Row(
+                                      children: [
+                                        Icon(Icons.hourglass_empty, color: Colors.orange, size: 16),
+                                        SizedBox(width: 8),
+                                        Text('Menunggu bukti pembayaran dari user',
+                                            style: TextStyle(fontSize: 12, color: Colors.orange)),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                ],
+
+                                // Tombol update status
+                                const Text('Update Status:',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: ['pending','diproses','dikirim','selesai','dibatalkan']
+                                      .where((s) => s != status)
+                                      .map((s) => ElevatedButton(
+                                    onPressed: () => _updateStatus(rawId, s),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: _statusColor(s),
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    child: Text(
+                                      _statusLabel(s),
+                                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                                    ),
+                                  )).toList(),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    );
+                  },
                 );
               },
             ),
@@ -1309,19 +1519,6 @@ class _OrderManagementTabState extends State<OrderManagementTab> {
         ],
       ),
     );
-  }
-
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'Dikemas':
-        return Colors.blue;
-      case 'Dikirim':
-        return Colors.orange;
-      case 'Selesai':
-        return Colors.green;
-      default:
-        return kGray;
-    }
   }
 }
 

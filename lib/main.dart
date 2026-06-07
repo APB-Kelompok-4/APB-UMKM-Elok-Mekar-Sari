@@ -34,7 +34,11 @@ class UMKMApp extends StatelessWidget {
       ),
       home: const LoginPage(),
       routes: {
-        '/home': (context) => MainPage(),
+        '/home': (context) {
+        final args = ModalRoute.of(context)?.settings.arguments;
+        final tabIndex = (args is Map && args['tab'] is int) ? args['tab'] as int : 0;
+        return MainPage(initialTab: tabIndex);
+      },
         '/admin': (context) => const AdminPage(),
         '/register': (context) => const RegisterPage(),
       },
@@ -54,12 +58,15 @@ const kBg = Color(0xFFFAFAF7);
 
 // =================== MAIN PAGE ===================
 class MainPage extends StatefulWidget {
+  final int initialTab;
+  const MainPage({Key? key, this.initialTab = 0}) : super(key: key);
+
   @override
   _MainPageState createState() => _MainPageState();
 }
 
 class _MainPageState extends State<MainPage> {
-  int _selectedIndex = 0;
+  late int _selectedIndex;
 
   // Data user dari Firebase Auth + Firestore
   String _userId = '';
@@ -70,6 +77,7 @@ class _MainPageState extends State<MainPage> {
   @override
   void initState() {
     super.initState();
+    _selectedIndex = widget.initialTab; // default 0, atau 2 jika dari checkout
     _loadUserData();
   }
 
