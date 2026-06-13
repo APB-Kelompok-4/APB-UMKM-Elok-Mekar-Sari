@@ -46,11 +46,6 @@ class _ComplaintPageState extends State<ComplaintPage>
     super.dispose();
   }
 
-  List<Complaint> get myComplaints =>
-      ComplaintService.complaints
-          .where((c) => c.customerId == widget.currentUserId)
-          .toList();
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -72,7 +67,10 @@ class _ComplaintPageState extends State<ComplaintPage>
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                    builder: (context) => const chatbot.ChatbotPage()),
+                    builder: (context) => chatbot.ChatbotPage(
+                          currentUserId: widget.currentUserId,
+                          currentUserName: widget.currentUserName,
+                        )),
               );
             },
           ),
@@ -98,20 +96,32 @@ class _ComplaintPageState extends State<ComplaintPage>
             currentUserId: widget.currentUserId,
             currentUserName: widget.currentUserName,
             currentUserEmail: widget.currentUserEmail,
-            onSubmit: (complaint) {
-              setState(() {
-                ComplaintService.addComplaint(complaint);
-              });
+            onSubmit: (complaint) async {
+              await ComplaintService.addComplaint(complaint);
               _tabController.animateTo(1);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Keluhan berhasil disubmit'),
-                  backgroundColor: kGreen,
-                ),
-              );
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Keluhan berhasil disubmit'),
+                    backgroundColor: kGreen,
+                  ),
+                );
+              }
             },
           ),
-          ComplaintHistoryTab(complaints: myComplaints),
+          StreamBuilder<List<Complaint>>(
+            stream: ComplaintService.streamUserComplaints(widget.currentUserId),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator(color: kGreen));
+              }
+              if (snapshot.hasError) {
+                return Center(child: Text('Terjadi kesalahan: ${snapshot.error}'));
+              }
+              final complaints = snapshot.data ?? [];
+              return ComplaintHistoryTab(complaints: complaints);
+            },
+          ),
         ],
       ),
     );
@@ -407,13 +417,11 @@ class ComplaintDetailPage extends StatefulWidget {
 
 class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
   late TextEditingController _chatController;
-  late Complaint _complaint;
 
   @override
   void initState() {
     super.initState();
     _chatController = TextEditingController();
-    _complaint = widget.complaint;
   }
 
   @override
@@ -422,403 +430,419 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
     super.dispose();
   }
 
-  void _sendMessage() {
+  Future<void> _sendMessage(String complaintId) async {
     if (_chatController.text.isEmpty) return;
 
-    final newMessage = {
-      'sender': 'customer',
-      'message': _chatController.text,
-      'time':
-          DateFormat('dd-MM-yyyy HH:mm', 'id_ID').format(DateTime.now()),
-    };
-
-    final updatedComplaint = _complaint.copyWith(
-      chat: [..._complaint.chat, newMessage],
-    );
-
-    final index = ComplaintService.complaints
-        .indexWhere((c) => c.id == _complaint.id);
-    if (index >= 0) {
-      ComplaintService.complaints[index] = updatedComplaint;
-    }
-
-    setState(() {
-      _complaint = updatedComplaint;
-    });
-
+    final text = _chatController.text;
     _chatController.clear();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Pesan terkirim ke admin'),
-        duration: Duration(seconds: 2),
-      ),
+    await ComplaintService.sendChatMessage(
+      complaintId: complaintId,
+      sender: 'customer',
+      message: text,
     );
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pesan terkirim ke admin'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Detail Keluhan'),
-        backgroundColor: kGreen,
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Status Card
-                  Card(
-                    elevation: 2,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment:
-                                MainAxisAlignment.spaceBetween,
+    return StreamBuilder<Complaint?>(
+      stream: ComplaintService.streamComplaint(widget.complaint.id),
+      builder: (context, snapshot) {
+        final complaint = snapshot.data ?? widget.complaint;
+
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Detail Keluhan'),
+            backgroundColor: kGreen,
+          ),
+          body: Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Status Card
+                      Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    _complaint.id,
-                                    style: const TextStyle(
-                                        fontSize: 12,
-                                        color: kGray,
-                                        fontWeight: FontWeight.w600),
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        complaint.id,
+                                        style: const TextStyle(
+                                            fontSize: 12,
+                                            color: kGray,
+                                            fontWeight: FontWeight.w600),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        complaint.subject,
+                                        style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            color: kDark),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    _complaint.subject,
-                                    style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: kDark),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: _getStatusColor(complaint.status)
+                                          .withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      _getStatusText(complaint.status),
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: _getStatusColor(
+                                              complaint.status)),
+                                    ),
                                   ),
                                 ],
                               ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: _getStatusColor(_complaint.status)
-                                      .withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  _getStatusText(_complaint.status),
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: _getStatusColor(
-                                          _complaint.status)),
-                                ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: kGreenPale,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      complaint.category,
+                                      style: const TextStyle(
+                                          fontSize: 11,
+                                          color: kGreen,
+                                          fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Icon(
+                                      _getPriorityIcon(complaint.priority),
+                                      size: 16,
+                                      color: _getPriorityColor(
+                                          complaint.priority)),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    _getPriorityText(complaint.priority),
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: _getPriorityColor(
+                                            complaint.priority),
+                                        fontWeight: FontWeight.w600),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: kGreenPale,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  _complaint.category,
-                                  style: const TextStyle(
-                                      fontSize: 11,
-                                      color: kGreen,
-                                      fontWeight: FontWeight.w600),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Icon(
-                                  _getPriorityIcon(_complaint.priority),
-                                  size: 16,
-                                  color: _getPriorityColor(
-                                      _complaint.priority)),
-                              const SizedBox(width: 4),
-                              Text(
-                                _getPriorityText(_complaint.priority),
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    color: _getPriorityColor(
-                                        _complaint.priority),
-                                    fontWeight: FontWeight.w600),
-                              ),
-                            ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      _buildSection('Informasi Pelanggan', [
+                        _buildDetailRow('Nama', complaint.customerName),
+                        _buildDetailRow('Email', complaint.customerEmail),
+                      ]),
+                      const SizedBox(height: 16),
+
+                      _buildSection('Deskripsi Keluhan', [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            complaint.description,
+                            style: const TextStyle(
+                                fontSize: 13, height: 1.6, color: kDark),
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  _buildSection('Informasi Pelanggan', [
-                    _buildDetailRow('Nama', _complaint.customerName),
-                    _buildDetailRow('Email', _complaint.customerEmail),
-                  ]),
-                  const SizedBox(height: 16),
-
-                  _buildSection('Deskripsi Keluhan', [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Text(
-                        _complaint.description,
-                        style: const TextStyle(
-                            fontSize: 13, height: 1.6, color: kDark),
-                      ),
-                    ),
-                  ]),
-                  const SizedBox(height: 16),
-
-                  _buildSection('Tanggal', [
-                    _buildDetailRow(
-                      'Diajukan',
-                      DateFormat('dd MMMM yyyy HH:mm', 'id_ID')
-                          .format(_complaint.createdDate),
-                    ),
-                    if (_complaint.resolvedDate != null)
-                      _buildDetailRow(
-                        'Terselesaikan',
-                        DateFormat('dd MMMM yyyy HH:mm', 'id_ID')
-                            .format(_complaint.resolvedDate!),
-                      ),
-                  ]),
-                  const SizedBox(height: 16),
-
-                  if (_complaint.adminResponse != null)
-                    _buildSection('Respons dari Admin', [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: kGreenPale,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                              color: kGreen.withValues(alpha: 0.3)),
                         ),
-                        child: Text(
-                          _complaint.adminResponse!,
-                          style: const TextStyle(
-                              fontSize: 13, height: 1.6, color: kDark),
-                        ),
-                      ),
-                    ]),
-                  if (_complaint.adminResponse != null)
-                    const SizedBox(height: 16),
+                      ]),
+                      const SizedBox(height: 16),
 
-                  if (_complaint.chat.isNotEmpty)
-                    _buildSection('Riwayat Chat', [
-                      Container(
-                        height: 250,
-                        decoration: BoxDecoration(
-                          border: Border.all(color: kBorder),
-                          borderRadius: BorderRadius.circular(8),
-                          color: kBg,
+                      _buildSection('Tanggal', [
+                        _buildDetailRow(
+                          'Diajukan',
+                          DateFormat('dd MMMM yyyy HH:mm', 'id_ID')
+                              .format(complaint.createdDate),
                         ),
-                        child: ListView.builder(
-                          padding: const EdgeInsets.all(8),
-                          itemCount: _complaint.chat.length,
-                          itemBuilder: (context, index) {
-                            final chat = _complaint.chat[index];
-                            final isAdmin = chat['sender'] == 'admin';
-                            return Align(
-                              alignment: isAdmin
-                                  ? Alignment.centerRight
-                                  : Alignment.centerLeft,
-                              child: Container(
-                                margin: const EdgeInsets.symmetric(
-                                    vertical: 4),
-                                padding: const EdgeInsets.all(8),
-                                constraints: BoxConstraints(
-                                    maxWidth: MediaQuery.of(context)
-                                            .size
-                                            .width *
-                                        0.7),
-                                decoration: BoxDecoration(
-                                  color: isAdmin
-                                      ? kGreen
-                                      : Colors.grey[200],
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      chat['message'],
-                                      style: TextStyle(
-                                          color: isAdmin
-                                              ? Colors.white
-                                              : kDark,
-                                          fontSize: 12),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      chat['time'],
-                                      style: TextStyle(
-                                          color: isAdmin
-                                              ? Colors.white70
-                                              : kGray,
-                                          fontSize: 10),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ]),
-                  if (_complaint.chat.isNotEmpty) const SizedBox(height: 16),
+                        if (complaint.resolvedDate != null)
+                          _buildDetailRow(
+                            'Terselesaikan',
+                            DateFormat('dd MMMM yyyy HH:mm', 'id_ID')
+                                .format(complaint.resolvedDate!),
+                          ),
+                      ]),
+                      const SizedBox(height: 16),
 
-                  if (_complaint.resolution != null)
-                    _buildSection('Penyelesaian', [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                              color: Colors.green.withValues(alpha: 0.3)),
-                        ),
-                        child: Text(
-                          _complaint.resolution!,
-                          style: const TextStyle(
-                              fontSize: 13, height: 1.6, color: kDark),
-                        ),
-                      ),
-                    ]),
-                  if (_complaint.resolution != null)
-                    const SizedBox(height: 16),
-
-                  if (_complaint.status == ComplaintStatus.resolved ||
-                      _complaint.status == ComplaintStatus.closed)
-                    _buildSection('Kepuasan Resolusi', [
-                      if (_complaint.rating > 0)
-                        Row(
-                          children: [
-                            ...List.generate(
-                              5,
-                              (index) => Icon(
-                                Icons.star,
-                                size: 20,
-                                color: index < _complaint.rating
-                                    ? Colors.amber
-                                    : Colors.grey.shade300,
-                              ),
+                      if (complaint.adminResponse != null)
+                        _buildSection('Respons dari Admin', [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: kGreenPale,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                  color: kGreen.withValues(alpha: 0.3)),
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              '${_complaint.rating}/5',
+                            child: Text(
+                              complaint.adminResponse!,
                               style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: kDark),
+                                  fontSize: 13, height: 1.6, color: kDark),
                             ),
-                          ],
-                        )
-                      else
-                        const Text(
-                          'Belum dinilai',
-                          style: TextStyle(color: kGray, fontSize: 13),
-                        ),
-                    ]),
-                ],
-              ),
-            ),
-          ),
+                          ),
+                        ]),
+                      if (complaint.adminResponse != null)
+                        const SizedBox(height: 16),
 
-          // ============================================================
-          // INPUT CHAT AREA - Border hitam tebal, teks & icon Kirim hitam
-          // ============================================================
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: const BoxDecoration(
-              border: Border(
-                top: BorderSide(
-                  color: Colors.black, // hitam
-                  width: 2.0,          // tebal
+                      StreamBuilder<List<Map<String, dynamic>>>(
+                        stream: ComplaintService.streamChatMessages(complaint.id),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
+                          final chatMessages = snapshot.data ?? [];
+                          if (chatMessages.isEmpty) return const SizedBox.shrink();
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Riwayat Chat',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: kDark,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                height: 250,
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: kBorder),
+                                  borderRadius: BorderRadius.circular(8),
+                                  color: kBg,
+                                ),
+                                child: ListView.builder(
+                                  padding: const EdgeInsets.all(8),
+                                  itemCount: chatMessages.length,
+                                  itemBuilder: (context, index) {
+                                    final chat = chatMessages[index];
+                                    final isAdmin = chat['sender'] == 'admin';
+                                    return Align(
+                                      alignment: isAdmin
+                                          ? Alignment.centerRight
+                                          : Alignment.centerLeft,
+                                      child: Container(
+                                        margin: const EdgeInsets.symmetric(vertical: 4),
+                                        padding: const EdgeInsets.all(8),
+                                        constraints: BoxConstraints(
+                                            maxWidth: MediaQuery.of(context).size.width * 0.7),
+                                        decoration: BoxDecoration(
+                                          color: isAdmin ? kGreen : Colors.grey[200],
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              chat['message'],
+                                              style: TextStyle(
+                                                  color: isAdmin ? Colors.white : kDark,
+                                                  fontSize: 12),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              chat['time'],
+                                              style: TextStyle(
+                                                  color: isAdmin ? Colors.white70 : kGray,
+                                                  fontSize: 10),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                            ],
+                          );
+                        },
+                      ),
+
+                      if (complaint.resolution != null)
+                        _buildSection('Penyelesaian', [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                  color: Colors.green.withValues(alpha: 0.3)),
+                            ),
+                            child: Text(
+                              complaint.resolution!,
+                              style: const TextStyle(
+                                  fontSize: 13, height: 1.6, color: kDark),
+                            ),
+                          ),
+                        ]),
+                      if (complaint.resolution != null)
+                        const SizedBox(height: 16),
+
+                      if (complaint.status == ComplaintStatus.resolved ||
+                          complaint.status == ComplaintStatus.closed)
+                        _buildSection('Kepuasan Resolusi', [
+                          if (complaint.rating > 0)
+                            Row(
+                              children: [
+                                ...List.generate(
+                                  5,
+                                  (index) => Icon(
+                                    Icons.star,
+                                    size: 20,
+                                    color: index < complaint.rating
+                                        ? Colors.amber
+                                        : Colors.grey.shade300,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '${complaint.rating}/5',
+                                  style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: kDark),
+                                ),
+                              ],
+                            )
+                          else
+                            const Text(
+                              'Belum dinilai',
+                              style: TextStyle(color: kGray, fontSize: 13),
+                            ),
+                        ]),
+                    ],
+                  ),
                 ),
               ),
-              color: Colors.white,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _chatController,
-                    decoration: InputDecoration(
-                      hintText: 'Balas pesan ke admin...',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(
-                          color: Colors.black, // hitam
-                          width: 2.0,           // tebal
-                        ),
+
+              // ============================================================
+              // INPUT CHAT AREA - Border hitam tebal, teks & icon Kirim hitam
+              // ============================================================
+              if (complaint.chatEnded)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  color: Colors.white,
+                  child: const Text(
+                    'Sesi chat ini telah diakhiri oleh Admin.',
+                    style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: const BoxDecoration(
+                    border: Border(
+                      top: BorderSide(
+                        color: Colors.black, // hitam
+                        width: 2.0,          // tebal
                       ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(
-                          color: Colors.black, // hitam
-                          width: 2.0,           // tebal
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(
-                          color: Colors.black, // hitam
-                          width: 2.5,           // lebih tebal saat fokus
-                        ),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 10),
                     ),
-                    maxLines: null,
+                    color: Colors.white,
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _chatController,
+                          decoration: InputDecoration(
+                            hintText: 'Balas pesan ke admin...',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(
+                                color: Colors.black, // hitam
+                                width: 2.0,           // tebal
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(
+                                color: Colors.black, // hitam
+                                width: 2.0,           // tebal
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(
+                                color: Colors.black, // hitam
+                                width: 2.5,           // lebih tebal saat fokus
+                              ),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
+                          ),
+                          maxLines: null,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        onPressed: () => _sendMessage(complaint.id),
+                        icon: const Icon(
+                          Icons.send,
+                          color: Colors.black, // hitam
+                          size: 18,
+                        ),
+                        label: const Text(
+                          'Kirim',
+                          style: TextStyle(
+                            color: Colors.black,      // hitam
+                            fontWeight: FontWeight.bold, // bold
+                            fontSize: 14,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: kGreen,
+                          foregroundColor: Colors.black, // fallback hitam
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  onPressed: _sendMessage,
-                  // Icon send hitam & bold
-                  icon: const Icon(
-                    Icons.send,
-                    color: Colors.black, // hitam
-                    size: 18,
-                  ),
-                  label: const Text(
-                    'Kirim',
-                    style: TextStyle(
-                      color: Colors.black,      // hitam
-                      fontWeight: FontWeight.bold, // bold
-                      fontSize: 14,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: kGreen,
-                    foregroundColor: Colors.black, // fallback hitam
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-              ],
-            ),
+            ],
           ),
-        ],
-      ),
+        );
+      }
     );
   }
 
@@ -1697,38 +1721,30 @@ class _AdminComplaintDetailPageState
     super.dispose();
   }
 
-  void _sendAdminMessage() {
+  Future<void> _sendAdminMessage() async {
     if (_chatController.text.isEmpty) return;
 
-    final newMessage = {
-      'sender': 'admin',
-      'message': _chatController.text,
-      'time':
-          DateFormat('dd-MM-yyyy HH:mm', 'id_ID').format(DateTime.now()),
-    };
-
-    final updatedComplaint = _complaint.copyWith(
-      chat: [..._complaint.chat, newMessage],
-    );
-
-    final index = ComplaintService.complaints
-        .indexWhere((c) => c.id == _complaint.id);
-    if (index >= 0) {
-      ComplaintService.complaints[index] = updatedComplaint;
-    }
-
-    setState(() {
-      _complaint = updatedComplaint;
-    });
-
+    final text = _chatController.text;
     _chatController.clear();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Pesan terkirim ke pelanggan'),
-        duration: Duration(seconds: 2),
-      ),
+    await ComplaintService.sendChatMessage(
+      complaintId: _complaint.id,
+      sender: 'admin',
+      message: text,
     );
+    await ComplaintService.updateAdminResponse(
+      complaintId: _complaint.id,
+      adminResponse: text,
+    );
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pesan terkirim ke pelanggan'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   @override
@@ -1788,146 +1804,167 @@ class _AdminComplaintDetailPageState
             // ============================================================
             // CHAT ADMIN - Border hitam tebal, teks & icon Kirim hitam
             // ============================================================
-            if (_complaint.chat.isNotEmpty)
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Riwayat Chat dengan Pelanggan',
-                        style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: kDark),
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        height: 250,
-                        decoration: BoxDecoration(
-                          border: Border.all(color: kBorder),
-                          borderRadius: BorderRadius.circular(8),
-                          color: kBg,
+            StreamBuilder<List<Map<String, dynamic>>>(
+              stream: ComplaintService.streamChatMessages(_complaint.id),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final chatMessages = snapshot.data ?? [];
+                if (chatMessages.isEmpty) return const SizedBox.shrink();
+
+                return Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Riwayat Chat dengan Pelanggan',
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: kDark),
                         ),
-                        child: ListView.builder(
-                          padding: const EdgeInsets.all(8),
-                          itemCount: _complaint.chat.length,
-                          itemBuilder: (context, index) {
-                            final chat = _complaint.chat[index];
-                            final isAdmin = chat['sender'] == 'admin';
-                            return Align(
-                              alignment: isAdmin
-                                  ? Alignment.centerRight
-                                  : Alignment.centerLeft,
-                              child: Container(
-                                margin: const EdgeInsets.symmetric(
-                                    vertical: 4),
-                                padding: const EdgeInsets.all(8),
-                                constraints: BoxConstraints(
-                                    maxWidth:
-                                        MediaQuery.of(context).size.width *
-                                            0.7),
-                                decoration: BoxDecoration(
-                                  color: isAdmin
-                                      ? kGreen
-                                      : Colors.grey[200],
-                                  borderRadius: BorderRadius.circular(8),
+                        const SizedBox(height: 12),
+                        Container(
+                          height: 250,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: kBorder),
+                            borderRadius: BorderRadius.circular(8),
+                            color: kBg,
+                          ),
+                          child: ListView.builder(
+                            padding: const EdgeInsets.all(8),
+                            itemCount: chatMessages.length,
+                            itemBuilder: (context, index) {
+                              final chat = chatMessages[index];
+                              final isAdmin = chat['sender'] == 'admin';
+                              return Align(
+                                alignment: isAdmin
+                                    ? Alignment.centerRight
+                                    : Alignment.centerLeft,
+                                child: Container(
+                                  margin: const EdgeInsets.symmetric(
+                                      vertical: 4),
+                                  padding: const EdgeInsets.all(8),
+                                  constraints: BoxConstraints(
+                                      maxWidth:
+                                          MediaQuery.of(context).size.width *
+                                              0.7),
+                                  decoration: BoxDecoration(
+                                    color: isAdmin
+                                        ? kGreen
+                                        : Colors.grey[200],
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(chat['message'],
+                                          style: TextStyle(
+                                              color: isAdmin
+                                                  ? Colors.white
+                                                  : kDark,
+                                              fontSize: 12)),
+                                      const SizedBox(height: 4),
+                                      Text(chat['time'],
+                                          style: TextStyle(
+                                              color: isAdmin
+                                                  ? Colors.white70
+                                                  : kGray,
+                                              fontSize: 10)),
+                                    ],
+                                  ),
                                 ),
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Text(chat['message'],
-                                        style: TextStyle(
-                                            color: isAdmin
-                                                ? Colors.white
-                                                : kDark,
-                                            fontSize: 12)),
-                                    const SizedBox(height: 4),
-                                    Text(chat['time'],
-                                        style: TextStyle(
-                                            color: isAdmin
-                                                ? Colors.white70
-                                                : kGray,
-                                            fontSize: 10)),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
+                              );
+                            },
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      // Admin Reply Input - Border hitam tebal
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _chatController,
-                              decoration: InputDecoration(
-                                hintText: 'Balas pesan ke pelanggan...',
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  borderSide: const BorderSide(
-                                    color: Colors.black, // hitam
-                                    width: 2.0,           // tebal
-                                  ),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  borderSide: const BorderSide(
-                                    color: Colors.black, // hitam
-                                    width: 2.0,           // tebal
-                                  ),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  borderSide: const BorderSide(
-                                    color: Colors.black, // hitam
-                                    width: 2.5, // lebih tebal saat fokus
-                                  ),
-                                ),
-                                contentPadding:
-                                    const EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 10),
-                              ),
-                              maxLines: null,
-                            ),
+                        const SizedBox(height: 12),
+                      // Admin Reply Input
+                      if (_complaint.chatEnded)
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          color: Colors.white,
+                          child: const Text(
+                            'Sesi chat ini telah diakhiri.',
+                            style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                            textAlign: TextAlign.center,
                           ),
-                          const SizedBox(width: 8),
-                          ElevatedButton.icon(
-                            onPressed: _sendAdminMessage,
-                            icon: const Icon(
-                              Icons.send,
-                              color: Colors.black, // hitam
-                              size: 18,
-                            ),
-                            label: const Text(
-                              'Kirim',
-                              style: TextStyle(
-                                color: Colors.black,       // hitam
-                                fontWeight: FontWeight.bold, // bold
-                                fontSize: 14,
+                        )
+                      else
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _chatController,
+                                decoration: InputDecoration(
+                                  hintText: 'Balas pesan ke pelanggan...',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: const BorderSide(
+                                      color: Colors.black, // hitam
+                                      width: 2.0,           // tebal
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: const BorderSide(
+                                      color: Colors.black, // hitam
+                                      width: 2.0,           // tebal
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: const BorderSide(
+                                      color: Colors.black, // hitam
+                                      width: 2.5, // lebih tebal saat fokus
+                                    ),
+                                  ),
+                                  contentPadding:
+                                      const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 10),
+                                ),
+                                maxLines: null,
                               ),
                             ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: kGreen,
-                              foregroundColor: Colors.black, // fallback hitam
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8)),
+                            const SizedBox(width: 8),
+                            ElevatedButton.icon(
+                              onPressed: _sendAdminMessage,
+                              icon: const Icon(
+                                Icons.send,
+                                color: Colors.black, // hitam
+                                size: 18,
+                              ),
+                              label: const Text(
+                                'Kirim',
+                                style: TextStyle(
+                                  color: Colors.black,       // hitam
+                                  fontWeight: FontWeight.bold, // bold
+                                  fontSize: 14,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: kGreen,
+                                foregroundColor: Colors.black, // fallback hitam
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8)),
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ],
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
+            ),
             const SizedBox(height: 16),
 
             const Text('Perbarui Status',

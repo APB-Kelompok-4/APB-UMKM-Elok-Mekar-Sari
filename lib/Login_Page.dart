@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'Register_Page.dart';
 
 const kGreen = Color(0xFF2D5A27);
@@ -98,6 +99,82 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  Future<void> _loginWithGoogle() async {
+    setState(() => _isLoading = true);
+    try {
+      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+
+      final AuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      final UserCredential userCredential =
+          await FirebaseAuth.instance.signInWithCredential(credential);
+
+      final User? user = userCredential.user;
+      if (user != null) {
+        final uid = user.uid;
+
+        final docSnap = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .get();
+
+        if (!docSnap.exists) {
+          await FirebaseFirestore.instance.collection('users').doc(uid).set({
+            'uid': uid,
+            'name': user.displayName ?? 'Pengguna Google',
+            'email': user.email ?? '',
+            'phone': user.phoneNumber ?? '',
+            'address': '',
+            'city': '',
+            'role': 'user',
+            'joinDate': FieldValue.serverTimestamp(),
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        }
+
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+
+        final roleSnap = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .get();
+        final role = roleSnap.data()?['role'] ?? 'user';
+
+        if (role == 'admin') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Login Admin via Google berhasil!'),
+              backgroundColor: kGreen,
+            ),
+          );
+          Navigator.pushNamedAndRemoveUntil(context, '/admin', (route) => false);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Login via Google berhasil!'),
+              backgroundColor: kGreen,
+            ),
+          );
+          Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      _showErrorSnackBar('Gagal masuk dengan Google: $e');
+    }
+  }
+
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -118,64 +195,54 @@ class _LoginPageState extends State<LoginPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const SizedBox(height: 24),
-
-                // ===== GREETING =====
-                const Text(
-                  'Selamat Datang',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: kDark,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Silakan masuk ke akun Anda untuk melanjutkan',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: kGray,
-                    height: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 32),
-
-                // ===== SOCIAL LOGIN BUTTONS =====
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildSocialButton(
-                        assetPath: 'assets/icons/google.png',
-                        label: 'Google',
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                  'Login dengan Google sedang dikembangkan'),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildSocialButton(
-                        assetPath: 'assets/icons/facebook.png',
-                        label: 'Facebook',
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                  'Login dengan Facebook sedang dikembangkan'),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
+                 const SizedBox(height: 16),
+ 
+                 // ===== LOGO =====
+                 Container(
+                   padding: const EdgeInsets.only(bottom: 12),
+                   decoration: const BoxDecoration(
+                     border: Border(
+                       bottom: BorderSide(color: kGreen, width: 3),
+                     ),
+                   ),
+                   child: const Text(
+                     'Elok Mekar Sari',
+                     style: TextStyle(
+                       fontSize: 20,
+                       fontWeight: FontWeight.bold,
+                       color: kGreen,
+                       letterSpacing: 0.5,
+                     ),
+                   ),
+                 ),
+                 const SizedBox(height: 32),
+ 
+                 // ===== GREETING =====
+                 const Text(
+                   'Selamat Datang',
+                   style: TextStyle(
+                     fontSize: 28,
+                     fontWeight: FontWeight.bold,
+                     color: kDark,
+                   ),
+                 ),
+                 const SizedBox(height: 8),
+                 Text(
+                   'Silakan masuk ke akun Anda untuk melanjutkan',
+                   textAlign: TextAlign.center,
+                   style: TextStyle(
+                     fontSize: 14,
+                     color: kGray,
+                     height: 1.5,
+                   ),
+                 ),
+                 const SizedBox(height: 32),
+ 
+                 // ===== GOOGLE LOGIN BUTTON =====
+                 _buildGoogleButton(
+                   onTap: _isLoading ? () {} : _loginWithGoogle,
+                 ),
+                 const SizedBox(height: 24),
 
                 // ===== DIVIDER =====
                 Row(
@@ -393,41 +460,51 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  Widget _buildSocialButton({
-    required String assetPath,
-    required String label,
-    required VoidCallback onTap,
-  }) {
+  Widget _buildGoogleButton({required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
+          color: Colors.white,
           border: Border.all(color: kBorder),
           borderRadius: BorderRadius.circular(8),
-          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-        child: Column(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Image.asset(
-              assetPath,
-              width: 40,
-              height: 40,
+              'assets/icons/google.png',
+              width: 24,
+              height: 24,
               fit: BoxFit.contain,
               errorBuilder: (context, error, stackTrace) =>
-                  const Icon(Icons.login, size: 40, color: kGray),
+                  const Icon(Icons.g_mobiledata, size: 24, color: kGray),
             ),
-            const SizedBox(height: 4),
-            Text(label,
-                style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: kDark)),
+            const SizedBox(width: 12),
+            const Text(
+              'Login Google',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: kDark,
+                letterSpacing: 0.3,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
+
 
   @override
   void dispose() {

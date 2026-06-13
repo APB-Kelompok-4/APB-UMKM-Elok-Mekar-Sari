@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'services/complaint_service.dart';
 
 // ==================== WARNA CONSTANTS ====================
 const kGreen = Color(0xFF2D5A27);
@@ -401,7 +403,9 @@ class ChatbotEngine {
 
 // ==================== CHATBOT PAGE ====================
 class ChatbotPage extends StatefulWidget {
-  const ChatbotPage({Key? key}) : super(key: key);
+  final String? currentUserId;
+  final String? currentUserName;
+  const ChatbotPage({Key? key, this.currentUserId, this.currentUserName}) : super(key: key);
 
   @override
   State<ChatbotPage> createState() => _ChatbotPageState();
@@ -409,74 +413,79 @@ class ChatbotPage extends StatefulWidget {
 
 class _ChatbotPageState extends State<ChatbotPage> {
   final TextEditingController _messageController = TextEditingController();
-  final List<ChatMessage> _messages = [];
   final ChatbotEngine _chatbotEngine = ChatbotEngine();
   final ScrollController _scrollController = ScrollController();
   bool _isLoading = false;
+  bool _isSeeding = false;
 
   @override
   void initState() {
     super.initState();
-    _addBotMessage(_chatbotEngine.getResponse('halo'));
   }
 
-  void _sendMessage(String message) {
+  Future<void> _seedInitialMessage() async {
+    if (_isSeeding) return;
+    _isSeeding = true;
+    try {
+      final userId = widget.currentUserId ?? 'guest';
+      final welcome = _chatbotEngine.getResponse('halo');
+      await ComplaintService.sendChatbotMessage(
+        userId: userId,
+        message: welcome,
+        isBot: true,
+      );
+    } catch (e) {
+      debugPrint('Error seeding greeting: $e');
+    } finally {
+      _isSeeding = false;
+    }
+  }
+
+  Future<void> _sendMessage(String message) async {
     if (message.trim().isEmpty) return;
 
-    // Add user message
-    _addUserMessage(message);
+    final userId = widget.currentUserId ?? 'guest';
     _messageController.clear();
 
-    // Simulate bot typing
+    // Kirim pesan user ke Firestore
+    await ComplaintService.sendChatbotMessage(
+      userId: userId,
+      message: message,
+      isBot: false,
+    );
+
+    // Tampilkan indikator mengetik bot
     setState(() => _isLoading = true);
 
-    Future.delayed(const Duration(milliseconds: 800), () {
+    Future.delayed(const Duration(milliseconds: 800), () async {
       final response = _chatbotEngine.getResponse(message);
-      _addBotMessage(response);
-      setState(() => _isLoading = false);
-    });
-  }
-
-  void _addUserMessage(String message) {
-    setState(() {
-      _messages.add(
-        ChatMessage(
-          id: DateTime.now().toString(),
-          message: message,
-          isBot: false,
-          timestamp: DateTime.now(),
-        ),
+      await ComplaintService.sendChatbotMessage(
+        userId: userId,
+        message: response,
+        isBot: true,
       );
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     });
-    _scrollToBottom();
-  }
-
-  void _addBotMessage(String message) {
-    setState(() {
-      _messages.add(
-        ChatMessage(
-          id: DateTime.now().toString(),
-          message: message,
-          isBot: true,
-          timestamp: DateTime.now(),
-        ),
-      );
-    });
-    _scrollToBottom();
   }
 
   void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 100), () {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
-    });
+    if (_scrollController.hasClients) {
+      Future.delayed(const Duration(milliseconds: 100), () {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final userId = widget.currentUserId ?? 'guest';
+
     return Scaffold(
       backgroundColor: kBg,
       appBar: AppBar(
@@ -490,19 +499,44 @@ class _ChatbotPageState extends State<ChatbotPage> {
       ),
       body: Column(
         children: [
-          // Chat Messages
+          // Chat Messages (Firestore Real-time Stream)
           Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.all(12),
-              itemCount: _messages.length + (_isLoading ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (_isLoading && index == _messages.length) {
-                  return _buildTypingIndicator();
+            child: StreamBuilder<List<Map<String, dynamic>>>(
+              stream: ComplaintService.streamChatbotMessages(userId),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator(color: kGreen));
                 }
 
-                final message = _messages[index];
-                return _buildMessageBubble(message);
+                final messages = snapshot.data ?? [];
+                
+                // Seed initial greeting if empty
+                if (messages.isEmpty) {
+                  Future.microtask(() => _seedInitialMessage());
+                  return const Center(child: CircularProgressIndicator(color: kGreen));
+                }
+
+                WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+
+                return ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(12),
+                  itemCount: messages.length + (_isLoading ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    if (_isLoading && index == messages.length) {
+                      return _buildTypingIndicator();
+                    }
+
+                    final msg = messages[index];
+                    final chatMsg = ChatMessage(
+                      id: msg['id'] ?? '',
+                      message: msg['message'] ?? '',
+                      isBot: msg['isBot'] ?? false,
+                      timestamp: msg['time'] ?? DateTime.now(),
+                    );
+                    return _buildMessageBubble(chatMsg);
+                  },
+                );
               },
             ),
           ),
@@ -670,9 +704,14 @@ class FloatingChatButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return FloatingActionButton(
       onPressed: () {
+        final user = FirebaseAuth.instance.currentUser;
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const ChatbotPage()),
+          MaterialPageRoute(
+              builder: (context) => ChatbotPage(
+                    currentUserId: user?.uid ?? 'guest',
+                    currentUserName: user?.displayName ?? user?.email ?? 'Pengguna',
+                  )),
         );
       },
       backgroundColor: kGreen,

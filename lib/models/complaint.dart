@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 enum ComplaintStatus {
   submitted,
   reviewed,
@@ -28,6 +30,7 @@ class Complaint {
   final int rating; // 1-5 untuk kepuasan resolusi
   final List<String> attachments; // File paths
   final List<Map<String, dynamic>> chat; // Chat messages
+  final bool chatEnded; // Apakah sesi chat sudah diakhiri oleh admin
 
   Complaint({
     required this.id,
@@ -47,6 +50,7 @@ class Complaint {
     this.rating = 0,
     this.attachments = const [],
     this.chat = const [],
+    this.chatEnded = false,
   });
 
   Complaint copyWith({
@@ -67,6 +71,7 @@ class Complaint {
     int? rating,
     List<String>? attachments,
     List<Map<String, dynamic>>? chat,
+    bool? chatEnded,
   }) {
     return Complaint(
       id: id ?? this.id,
@@ -86,7 +91,97 @@ class Complaint {
       rating: rating ?? this.rating,
       attachments: attachments ?? this.attachments,
       chat: chat ?? this.chat,
+      chatEnded: chatEnded ?? this.chatEnded,
     );
+  }
+
+  // ============ Firestore Serialization ============
+
+  /// Convert Complaint ke Map untuk disimpan di Firestore
+  Map<String, dynamic> toMap() {
+    return {
+      'customerId': customerId,
+      'customerName': customerName,
+      'customerEmail': customerEmail,
+      'subject': subject,
+      'description': description,
+      'category': category,
+      'productName': productName,
+      'status': status.name,
+      'priority': priority.name,
+      'createdDate': Timestamp.fromDate(createdDate),
+      'resolvedDate': resolvedDate != null ? Timestamp.fromDate(resolvedDate!) : null,
+      'adminResponse': adminResponse,
+      'resolution': resolution,
+      'rating': rating,
+      'attachments': attachments,
+      'chatEnded': chatEnded,
+    };
+  }
+
+  /// Buat Complaint dari Firestore document snapshot
+  factory Complaint.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    return Complaint(
+      id: doc.id,
+      customerId: data['customerId'] ?? '',
+      customerName: data['customerName'] ?? '',
+      customerEmail: data['customerEmail'] ?? '',
+      subject: data['subject'] ?? '',
+      description: data['description'] ?? '',
+      category: data['category'] ?? 'Lainnya',
+      productName: data['productName'],
+      status: _parseStatus(data['status']),
+      priority: _parsePriority(data['priority']),
+      createdDate: data['createdDate'] != null
+          ? (data['createdDate'] as Timestamp).toDate()
+          : DateTime.now(),
+      resolvedDate: data['resolvedDate'] != null
+          ? (data['resolvedDate'] as Timestamp).toDate()
+          : null,
+      adminResponse: data['adminResponse'],
+      resolution: data['resolution'],
+      rating: data['rating'] ?? 0,
+      attachments: List<String>.from(data['attachments'] ?? []),
+      chat: [], // Chat diambil dari sub-collection terpisah
+      chatEnded: data['chatEnded'] ?? false,
+    );
+  }
+
+  static ComplaintStatus _parseStatus(String? value) {
+    switch (value) {
+      case 'submitted':
+        return ComplaintStatus.submitted;
+      case 'reviewed':
+        return ComplaintStatus.reviewed;
+      case 'inProgress':
+        return ComplaintStatus.inProgress;
+      case 'waitingCustomer':
+        return ComplaintStatus.waitingCustomer;
+      case 'resolved':
+        return ComplaintStatus.resolved;
+      case 'closed':
+        return ComplaintStatus.closed;
+      case 'rejected':
+        return ComplaintStatus.rejected;
+      default:
+        return ComplaintStatus.submitted;
+    }
+  }
+
+  static ComplaintPriority _parsePriority(String? value) {
+    switch (value) {
+      case 'low':
+        return ComplaintPriority.low;
+      case 'medium':
+        return ComplaintPriority.medium;
+      case 'high':
+        return ComplaintPriority.high;
+      case 'urgent':
+        return ComplaintPriority.urgent;
+      default:
+        return ComplaintPriority.medium;
+    }
   }
 }
 

@@ -2642,8 +2642,12 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
             icon: const Icon(Icons.message, color: Colors.white, size: 26),
             tooltip: 'Chat dengan Asisten',
             onPressed: () {
+              final user = FirebaseAuth.instance.currentUser;
               Navigator.push(context,
-                  MaterialPageRoute(builder: (context) => const chatbot.ChatbotPage()));
+                  MaterialPageRoute(builder: (context) => chatbot.ChatbotPage(
+                    currentUserId: user?.uid ?? 'guest',
+                    currentUserName: user?.displayName ?? user?.email ?? 'Pengguna',
+                  )));
             },
           ),
         ],

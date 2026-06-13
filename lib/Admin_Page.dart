@@ -3,10 +3,13 @@ import 'dart:typed_data';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'models/complaint.dart';
 import 'services/complaint_service.dart';
 import 'services/product_service.dart';
@@ -131,106 +134,181 @@ class DashboardTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-            const Text(
-              'Dashboard Utama',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: kDark,
-              ),
-            ),
-            const SizedBox(height: 20),
+    return StreamBuilder<List<Complaint>>(
+      stream: ComplaintService.streamAllComplaints(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(color: kGreen));
+        }
+        final allComplaints = snapshot.data ?? [];
+        
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance.collection('orders').snapshots(),
+          builder: (context, orderSnapshot) {
+            if (orderSnapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator(color: kGreen));
+            }
+            final orderDocs = orderSnapshot.data?.docs ?? [];
 
-            // Summary Cards
-            Row(
-              children: [
-                Expanded(
-                  child: _buildSummaryCard(
-                    'Total Order Hari Ini',
-                    '24',
-                    Icons.shopping_cart,
-                    kGreen,
+            // Calculate total orders today
+            final now = DateTime.now();
+            final startOfToday = DateTime(now.year, now.month, now.day);
+            final endOfToday = DateTime(now.year, now.month, now.day, 23, 59, 59);
+
+            final ordersTodayCount = orderDocs.where((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
+              if (createdAt == null) return false;
+              return createdAt.isAfter(startOfToday) && createdAt.isBefore(endOfToday);
+            }).length;
+
+            // Calculate total revenue from orders that are not cancelled
+            final totalRevenue = orderDocs.fold<double>(0.0, (sum, doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              if (data['status'] == 'dibatalkan') return sum;
+              final price = (data['totalPrice'] as num?)?.toDouble() ?? 0.0;
+              return sum + price;
+            });
+            final formattedRevenue = 'Rp ${NumberFormat('#,###', 'id_ID').format(totalRevenue)}';
+
+            // Calculate best selling product (top product)
+            final productQuantities = <String, int>{};
+            for (final doc in orderDocs) {
+              final data = doc.data() as Map<String, dynamic>;
+              if (data['status'] == 'dibatalkan') continue;
+              final items = (data['items'] as List<dynamic>?) ?? [];
+              for (final item in items) {
+                if (item is Map) {
+                  final name = item['productName'] as String? ?? '';
+                  final qty = (item['quantity'] as num?)?.toInt() ?? 0;
+                  if (name.isNotEmpty) {
+                    productQuantities[name] = (productQuantities[name] ?? 0) + qty;
+                  }
+                }
+              }
+            }
+            String topProduct = 'Tidak ada';
+            int maxQty = 0;
+            productQuantities.forEach((name, qty) {
+              if (qty > maxQty) {
+                maxQty = qty;
+                topProduct = name;
+              }
+            });
+
+            // Sort order docs by createdAt descending for recent orders list
+            final sortedOrderDocs = List<QueryDocumentSnapshot>.from(orderDocs)
+              ..sort((a, b) {
+                final aTs = (a.data() as Map)['createdAt'] as Timestamp?;
+                final bTs = (b.data() as Map)['createdAt'] as Timestamp?;
+                if (aTs == null || bTs == null) return 0;
+                return bTs.compareTo(aTs);
+              });
+            final recentOrderDocs = sortedOrderDocs.take(3).toList();
+
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Dashboard Utama',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: kDark,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildSummaryCard(
-                    'Total Pendapatan',
-                    'Rp 1.250.000',
-                    Icons.attach_money,
-                    kGreenLight,
+                  const SizedBox(height: 20),
+
+                  // Summary Cards
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildSummaryCard(
+                          'Total Order Hari Ini',
+                          ordersTodayCount.toString(),
+                          Icons.shopping_cart,
+                          kGreen,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildSummaryCard(
+                          'Total Pendapatan',
+                          formattedRevenue,
+                          Icons.attach_money,
+                          kGreenLight,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildSummaryCard(
-                  'Keluhan Pending',
-                  _getPendingComplaintCount().toString(),
-                  Icons.report_problem,
-                  Colors.orange,
-                ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildSummaryCard(
+                          'Keluhan Pending',
+                          _getPendingComplaintCount(allComplaints).toString(),
+                          Icons.report_problem,
+                          Colors.orange,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildSummaryCard(
+                          'Produk Terlaris',
+                          topProduct,
+                          Icons.star,
+                          Colors.amber,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  // Recent Orders
+                  const Text(
+                    'Order Terbaru',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: kDark,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildRecentOrdersList(recentOrderDocs),
+
+                  const SizedBox(height: 32),
+                  // Pending Complaints
+                  const Text(
+                    'Keluhan Pending',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: kDark,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildPendingComplaintsList(allComplaints),
+                ],
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildSummaryCard(
-                  'Produk Terlaris',
-                  'Nugget Lele',
-                  Icons.star,
-                  Colors.amber,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 32),
-
-          // Recent Orders
-          const Text(
-            'Order Terbaru',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: kDark,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _buildRecentOrdersList(),
-
-          const SizedBox(height: 32),
-          // Pending Complaints
-          const Text(
-            'Keluhan Pending',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: kDark,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _buildPendingComplaintsList(),
-        ],
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
-  int _getPendingComplaintCount() {
+  int _getPendingComplaintCount(List<Complaint> allComplaints) {
     final umkmProducts = _getUMKMProducts();
-    return ComplaintService.complaints.where((complaint) {
+    return allComplaints.where((complaint) {
       final isPending =
           complaint.status == ComplaintStatus.submitted ||
           complaint.status == ComplaintStatus.inProgress ||
           complaint.status == ComplaintStatus.reviewed ||
           complaint.status == ComplaintStatus.waitingCustomer;
-      // Filter hanya keluhan dari produk UMKM yang ada
       final isUMKMProduct =
           complaint.productName != null &&
           umkmProducts.contains(complaint.productName);
@@ -249,15 +327,14 @@ class DashboardTab extends StatelessWidget {
     ];
   }
 
-  List<Complaint> _getPendingComplaints() {
+  List<Complaint> _getPendingComplaints(List<Complaint> allComplaints) {
     final umkmProducts = _getUMKMProducts();
-    return ComplaintService.complaints.where((complaint) {
+    return allComplaints.where((complaint) {
       final isPending =
           complaint.status == ComplaintStatus.submitted ||
           complaint.status == ComplaintStatus.inProgress ||
           complaint.status == ComplaintStatus.reviewed ||
           complaint.status == ComplaintStatus.waitingCustomer;
-      // Filter hanya keluhan dari produk UMKM yang ada
       final isUMKMProduct =
           complaint.productName != null &&
           umkmProducts.contains(complaint.productName);
@@ -295,8 +372,9 @@ class DashboardTab extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               value,
-              style: TextStyle(
-                fontSize: 20,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 16,
                 fontWeight: FontWeight.bold,
                 color: kDark,
               ),
@@ -313,43 +391,93 @@ class DashboardTab extends StatelessWidget {
     );
   }
 
-  Widget _buildRecentOrdersList() {
-    final orders = [
-      {
-        'id': '001',
-        'customer': 'John Doe',
-        'status': 'Dikemas',
-        'total': 'Rp 50.000',
-      },
-      {
-        'id': '002',
-        'customer': 'Jane Smith',
-        'status': 'Dikirim',
-        'total': 'Rp 75.000',
-      },
-      {
-        'id': '003',
-        'customer': 'Bob Johnson',
-        'status': 'Selesai',
-        'total': 'Rp 30.000',
-      },
-    ];
+  Widget _buildRecentOrdersList(List<QueryDocumentSnapshot> docs) {
+    if (docs.isEmpty) {
+      return Card(
+        color: kBg,
+        margin: const EdgeInsets.only(bottom: 8),
+        child: const Padding(
+          padding: EdgeInsets.all(16),
+          child: Text(
+            'Tidak ada order saat ini.',
+            style: TextStyle(color: kGray),
+          ),
+        ),
+      );
+    }
 
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: orders.length,
+      itemCount: docs.length,
       itemBuilder: (context, index) {
-        final order = orders[index];
+        final data = docs[index].data() as Map<String, dynamic>;
+        final rawId = data['orderId'] as String? ?? docs[index].id;
+        final status = data['status'] ?? 'pending';
+        final recipientName = data['recipientName'] ?? '-';
+        final totalPrice = data['totalPrice'] ?? 0;
+        final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
+
+        // Format nomor order
+        String displayOrderId;
+        if (createdAt != null) {
+          final date = DateFormat('yyyyMMdd').format(createdAt);
+          displayOrderId = 'EMS-$date-${rawId.substring(0,4).toUpperCase()}';
+        } else {
+          displayOrderId = 'EMS-${rawId.substring(0,8).toUpperCase()}';
+        }
+
+        String statusLabelDashboard;
+        switch (status) {
+          case 'pending':
+            statusLabelDashboard = 'Menunggu Pembayaran';
+            break;
+          case 'diproses':
+            statusLabelDashboard = 'Dikemas';
+            break;
+          case 'dikirim':
+            statusLabelDashboard = 'Dikirim';
+            break;
+          case 'selesai':
+            statusLabelDashboard = 'Selesai';
+            break;
+          case 'dibatalkan':
+            statusLabelDashboard = 'Dibatalkan';
+            break;
+          default:
+            statusLabelDashboard = status;
+        }
+
+        Color statusColorDashboard;
+        switch (status) {
+          case 'pending':
+            statusColorDashboard = Colors.orange;
+            break;
+          case 'diproses':
+            statusColorDashboard = Colors.blue;
+            break;
+          case 'dikirim':
+            statusColorDashboard = Colors.orange;
+            break;
+          case 'selesai':
+            statusColorDashboard = Colors.green;
+            break;
+          case 'dibatalkan':
+            statusColorDashboard = Colors.red;
+            break;
+          default:
+            statusColorDashboard = kGray;
+        }
+
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
           child: ListTile(
-            title: Text('Order #${order['id']} - ${order['customer']}'),
-            subtitle: Text('Total: ${order['total']}'),
+            title: Text('Order #$displayOrderId - $recipientName'),
+            subtitle: Text('Total: Rp ${NumberFormat('#,###', 'id_ID').format(totalPrice)}'),
             trailing: Text(
-              order['status']!,
+              statusLabelDashboard,
               style: TextStyle(
-                color: _getStatusColor(order['status']!),
+                color: statusColorDashboard,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -359,8 +487,8 @@ class DashboardTab extends StatelessWidget {
     );
   }
 
-  Widget _buildPendingComplaintsList() {
-    final pendingComplaints = _getPendingComplaints();
+  Widget _buildPendingComplaintsList(List<Complaint> allComplaints) {
+    final pendingComplaints = _getPendingComplaints(allComplaints);
 
     if (pendingComplaints.isEmpty) {
       return Card(
@@ -404,19 +532,6 @@ class DashboardTab extends StatelessWidget {
         );
       },
     );
-  }
-
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'Dikemas':
-        return Colors.blue;
-      case 'Dikirim':
-        return Colors.orange;
-      case 'Selesai':
-        return Colors.green;
-      default:
-        return kGray;
-    }
   }
 }
 
@@ -1541,22 +1656,16 @@ class _ComplaintManagementTabState extends State<ComplaintManagementTab> {
     'Selesai',
   ];
 
-  List<Map<String, dynamic>> get _complaints {
-    return ComplaintService.complaints
-        .map(
-          (complaint) => {
-            'id': complaint.id,
-            'customer': complaint.customerName,
-            'subject': complaint.subject,
-            'description': complaint.description,
-            'priority': _priorityToString(complaint.priority),
-            'status': _statusToString(complaint.status),
-            'product': complaint.productName ?? 'Umum',
-            'date': complaint.createdDate.toString().split(' ')[0],
-            'chat': complaint.chat,
-          },
-        )
-        .toList();
+  List<Complaint> _filterComplaints(List<Complaint> allComplaints) {
+    return allComplaints.where((complaint) {
+      final priorityStr = _priorityToString(complaint.priority);
+      final statusStr = _statusToString(complaint.status);
+      final priorityMatch =
+          _selectedPriority == 'Semua' || priorityStr == _selectedPriority;
+      final statusMatch =
+          _selectedStatus == 'Semua' || statusStr == _selectedStatus;
+      return priorityMatch && statusMatch;
+    }).toList();
   }
 
   String _priorityToString(ComplaintPriority priority) {
@@ -1591,140 +1700,151 @@ class _ComplaintManagementTabState extends State<ComplaintManagementTab> {
     }
   }
 
-  List<Map<String, dynamic>> get _filteredComplaints {
-    return _complaints.where((complaint) {
-      final priorityMatch =
-          _selectedPriority == 'Semua' ||
-          complaint['priority'] == _selectedPriority;
-      final statusMatch =
-          _selectedStatus == 'Semua' || complaint['status'] == _selectedStatus;
-      return priorityMatch && statusMatch;
-    }).toList();
+  void _updateComplaintStatus(Complaint complaint, String newStatus) {
+    ComplaintStatus statusToSet = ComplaintStatus.submitted;
+    if (newStatus == 'Diproses') statusToSet = ComplaintStatus.inProgress;
+    if (newStatus == 'Selesai') statusToSet = ComplaintStatus.resolved;
+
+    ComplaintService.updateStatus(complaint.id, statusToSet);
   }
 
-  void _updateComplaintStatus(int index, String newStatus) {
-    setState(() {
-      _complaints[index]['status'] = newStatus;
-    });
-  }
-
-  void _replyToComplaint(int index) {
-    final complaintMap = _filteredComplaints[index];
-    final originalComplaint = ComplaintService.getComplaintById(
-      complaintMap['id'],
-    )!;
+  void _replyToComplaint(Complaint initialComplaint) {
     final TextEditingController messageController = TextEditingController();
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: Text('Chat Keluhan #${complaintMap['id']}'),
-          content: SizedBox(
-            width: double.maxFinite,
-            height: 400,
-            child: Column(
-              children: [
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: originalComplaint.chat.length,
-                    itemBuilder: (context, chatIndex) {
-                      final chat = originalComplaint.chat[chatIndex];
-                      final isAdmin = chat['sender'] == 'admin';
-                      return Align(
-                        alignment: isAdmin
-                            ? Alignment.centerRight
-                            : Alignment.centerLeft,
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(
-                            vertical: 4,
-                            horizontal: 8,
-                          ),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: isAdmin ? kGreen : Colors.grey[200],
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                chat['message'],
-                                style: TextStyle(
-                                  color: isAdmin ? Colors.white : kDark,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                chat['time'],
-                                style: TextStyle(
-                                  color: isAdmin ? Colors.white70 : kGray,
-                                  fontSize: 10,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const Divider(),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: messageController,
-                        decoration: const InputDecoration(
-                          hintText: 'Ketik balasan...',
-                          border: OutlineInputBorder(),
-                        ),
-                        maxLines: 2,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      onPressed: () {
-                        if (messageController.text.isNotEmpty) {
-                          final updatedChat =
-                              List<Map<String, dynamic>>.from(
-                                originalComplaint.chat,
-                              )..add({
-                                'sender': 'admin',
-                                'message': messageController.text,
-                                'time': DateTime.now()
-                                    .toString()
-                                    .substring(0, 16)
-                                    .replaceAll('T', ' '),
-                              });
-                          final updatedComplaint = originalComplaint.copyWith(
-                            chat: updatedChat,
-                            adminResponse: messageController.text,
-                          );
-                          ComplaintService.updateComplaint(
-                            originalComplaint.id,
-                            updatedComplaint,
-                          );
-                          setState(() {});
-                          messageController.clear();
+      builder: (context) => StreamBuilder<Complaint?>(
+        stream: ComplaintService.streamComplaint(initialComplaint.id),
+        builder: (context, snapshot) {
+          final complaint = snapshot.data ?? initialComplaint;
+
+          return AlertDialog(
+            title: Text('Chat Keluhan #${complaint.id}'),
+            content: SizedBox(
+              width: double.maxFinite,
+              height: 400,
+              child: Column(
+                children: [
+                  Expanded(
+                    child: StreamBuilder<List<Map<String, dynamic>>>(
+                      stream: ComplaintService.streamChatMessages(complaint.id),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
                         }
+                        final chatMessages = snapshot.data ?? [];
+                        if (chatMessages.isEmpty) {
+                          return const Center(child: Text('Belum ada pesan chat.'));
+                        }
+                        return ListView.builder(
+                          itemCount: chatMessages.length,
+                          itemBuilder: (context, chatIndex) {
+                            final chat = chatMessages[chatIndex];
+                            final isAdmin = chat['sender'] == 'admin';
+                            return Align(
+                              alignment: isAdmin
+                                  ? Alignment.centerRight
+                                  : Alignment.centerLeft,
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(
+                                  vertical: 4,
+                                  horizontal: 8,
+                                ),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: isAdmin ? kGreen : Colors.grey[200],
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      chat['message'],
+                                      style: TextStyle(
+                                        color: isAdmin ? Colors.white : kDark,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      chat['time'],
+                                      style: TextStyle(
+                                        color: isAdmin ? Colors.white70 : kGray,
+                                        fontSize: 10,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        );
                       },
-                      icon: const Icon(Icons.send),
-                      color: kGreen,
                     ),
-                  ],
+                  ),
+                  const Divider(),
+                  if (complaint.chatEnded)
+                    const Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Text(
+                        'Sesi chat ini telah diakhiri.',
+                        style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                      ),
+                    )
+                  else
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: messageController,
+                            decoration: const InputDecoration(
+                              hintText: 'Ketik balasan...',
+                              border: OutlineInputBorder(),
+                            ),
+                            maxLines: 2,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          onPressed: () async {
+                            if (messageController.text.isNotEmpty) {
+                              final text = messageController.text;
+                              messageController.clear();
+                              await ComplaintService.sendChatMessage(
+                                complaintId: complaint.id,
+                                sender: 'admin',
+                                message: text,
+                              );
+                              await ComplaintService.updateAdminResponse(
+                                complaintId: complaint.id,
+                                adminResponse: text,
+                              );
+                            }
+                          },
+                          icon: const Icon(Icons.send),
+                          color: kGreen,
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              if (!complaint.chatEnded)
+                TextButton(
+                  onPressed: () async {
+                    await ComplaintService.endChatSession(complaint.id);
+                    if (context.mounted) Navigator.pop(context);
+                  },
+                  child: const Text('Akhiri Chat', style: TextStyle(color: Colors.red)),
                 ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Tutup'),
-            ),
-          ],
-        ),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Tutup'),
+              ),
+            ],
+          );
+        }
       ),
     );
   }
@@ -1786,115 +1906,135 @@ class _ComplaintManagementTabState extends State<ComplaintManagementTab> {
 
           // Complaints List
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _filteredComplaints.length,
-              itemBuilder: (context, index) {
-                final complaint = _filteredComplaints[index];
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+            child: StreamBuilder<List<Complaint>>(
+              stream: ComplaintService.streamAllComplaints(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator(color: kGreen));
+                }
+                if (snapshot.hasError) {
+                  return Center(child: Text('Error: ${snapshot.error}'));
+                }
+                
+                final allComplaints = snapshot.data ?? [];
+                final filteredComplaints = _filterComplaints(allComplaints);
+
+                if (filteredComplaints.isEmpty) {
+                  return const Center(child: Text('Tidak ada keluhan ditemukan.'));
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: filteredComplaints.length,
+                  itemBuilder: (context, index) {
+                    final complaint = filteredComplaints[index];
+                    final priorityStr = _priorityToString(complaint.priority);
+                    final statusStr = _statusToString(complaint.status);
+                    
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Keluhan #${complaint['id']} - ${complaint['subject']}',
-                                    style: const TextStyle(
-                                      fontSize: 16,
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Keluhan #${complaint.id} - ${complaint.subject}',
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        '${complaint.customerName} • ${complaint.createdDate.toString().split(' ')[0]}',
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      priorityStr,
+                                      style: TextStyle(
+                                        color: priorityStr == 'Tinggi' || priorityStr == 'Mendesak'
+                                            ? Colors.red
+                                            : Colors.orange,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      statusStr,
+                                      style: TextStyle(
+                                        color: _getStatusColor(statusStr),
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Text('Deskripsi: ${complaint.description}'),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                ElevatedButton.icon(
+                                  onPressed: () => _replyToComplaint(complaint),
+                                  icon: const Icon(Icons.chat_bubble_outline, color: Colors.black),
+                                  label: const Text(
+                                    'Balas Chat',
+                                    style: TextStyle(
+                                      color: Colors.black,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '${complaint['customer']} • ${complaint['date']}',
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  complaint['priority'],
-                                  style: TextStyle(
-                                    color: complaint['priority'] == 'Tinggi'
-                                        ? Colors.red
-                                        : Colors.orange,
-                                    fontWeight: FontWeight.bold,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: kGreen,
                                   ),
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  complaint['status'],
-                                  style: TextStyle(
-                                    color: _getStatusColor(complaint['status']),
-                                    fontWeight: FontWeight.w600,
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: DropdownButtonFormField<String>(
+                                    value: statusStr,
+                                    items: ['Pending', 'Diproses', 'Selesai'].map((
+                                      status,
+                                    ) {
+                                      return DropdownMenuItem(
+                                        value: status,
+                                        child: Text(status),
+                                      );
+                                    }).toList(),
+                                    onChanged: (value) => _updateComplaintStatus(
+                                      complaint,
+                                      value!,
+                                    ),
+                                    decoration: InputDecoration(
+                                      labelText: 'Status',
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
                           ],
                         ),
-                        const SizedBox(height: 12),
-                        Text('Deskripsi: ${complaint['description']}'),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            ElevatedButton.icon(
-                              onPressed: () => _replyToComplaint(index),
-                              icon: const Icon(Icons.chat_bubble_outline, color: Colors.black),
-                              label: const Text(
-                                'Balas Chat',
-                                style: TextStyle(
-                                  color: Colors.black,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: kGreen,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: DropdownButtonFormField<String>(
-                                initialValue: complaint['status'],
-                                items: ['Pending', 'Diproses', 'Selesai'].map((
-                                  status,
-                                ) {
-                                  return DropdownMenuItem(
-                                    value: status,
-                                    child: Text(status),
-                                  );
-                                }).toList(),
-                                onChanged: (value) => _updateComplaintStatus(
-                                  _complaints.indexWhere(
-                                    (c) => c['id'] == complaint['id'],
-                                  ),
-                                  value!,
-                                ),
-                                decoration: InputDecoration(
-                                  labelText: 'Status',
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
+                      ),
+                    );
+                  },
                 );
-              },
+              }
             ),
           ),
         ],
@@ -2002,188 +2142,299 @@ class _UserManagementTabState extends State<UserManagementTab> {
 }
 
 // ========== REPORTS TAB ==========
-class ReportsTab extends StatelessWidget {
+class ReportsTab extends StatefulWidget {
   const ReportsTab({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Laporan & Statistik',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: kDark,
-            ),
-          ),
-          const SizedBox(height: 20),
+  State<ReportsTab> createState() => _ReportsTabState();
+}
 
-          // Sales Chart
-          Card(
-            elevation: 4,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Penjualan Mingguan',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    height: 200,
-                    child: LineChart(
-                      LineChartData(
-                        gridData: FlGridData(show: false),
-                        titlesData: FlTitlesData(show: false),
-                        borderData: FlBorderData(show: false),
-                        lineBarsData: [
-                          LineChartBarData(
-                            spots: [
-                              const FlSpot(0, 100000),
-                              const FlSpot(1, 150000),
-                              const FlSpot(2, 120000),
-                              const FlSpot(3, 180000),
-                              const FlSpot(4, 200000),
-                              const FlSpot(5, 170000),
-                              const FlSpot(6, 220000),
-                            ],
-                            isCurved: true,
-                            color: kGreen,
-                            barWidth: 4,
-                            belowBarData: BarAreaData(
-                              show: true,
-                              color: kGreen.withValues(alpha: 0.1),
-                            ),
-                          ),
-                        ],
+class _ReportsTabState extends State<ReportsTab> {
+  Future<void> _exportLaporan(BuildContext context, List<QueryDocumentSnapshot> docs) async {
+    try {
+      final csvContent = StringBuffer();
+      // CSV Header
+      csvContent.writeln('ID Order,Tanggal,Nama Penerima,Total Harga,Status,Metode Pembayaran,Alamat');
+      
+      for (final doc in docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final rawId = data['orderId'] as String? ?? doc.id;
+        final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
+        final dateStr = createdAt != null ? DateFormat('yyyy-MM-dd HH:mm').format(createdAt) : '-';
+        final recipientName = data['recipientName'] ?? '-';
+        final totalPrice = data['totalPrice'] ?? 0;
+        final status = data['status'] ?? '-';
+        final paymentMethod = data['paymentMethod'] ?? '-';
+        final address = data['address'] ?? '-';
+        
+        final cleanName = recipientName.replaceAll(',', ' ').replaceAll('\n', ' ').trim();
+        final cleanAddress = address.replaceAll(',', ' ').replaceAll('\n', ' ').trim();
+        
+        csvContent.writeln('$rawId,$dateStr,$cleanName,$totalPrice,$status,$paymentMethod,$cleanAddress');
+      }
+
+      if (kIsWeb) {
+        // Trigger browser download via launchUrl with data URI
+        final bytes = utf8.encode(csvContent.toString());
+        final base64Csv = base64Encode(bytes);
+        final uri = Uri.parse('data:text/csv;base64,$base64Csv');
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Laporan berhasil diunduh'),
+                backgroundColor: kGreen,
+              ),
+            );
+          }
+        } else {
+          throw 'Could not launch CSV download URI';
+        }
+      } else {
+        // Mobile platform (Android / iOS) - Use sharing directly to allow user to save/send the file reliably
+        final tempDir = Directory.systemTemp;
+        final file = File('${tempDir.path}/laporan_penjualan.csv');
+        await file.writeAsString(csvContent.toString());
+        
+        await Share.shareXFiles(
+          [XFile(file.path)],
+          subject: 'Laporan Penjualan',
+          text: 'Berikut adalah laporan penjualan dari aplikasi APB-UMKM Elok Mekar Sari.',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal export laporan: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('orders').snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(color: kGreen));
+        }
+
+        final orderDocs = snapshot.data?.docs ?? [];
+        
+        // Completed/successful orders (status == selesai)
+        final completedOrders = orderDocs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          return data['status'] == 'selesai';
+        }).toList();
+
+        // Total sales from completed orders
+        final totalPenjualanVal = completedOrders.fold<double>(0.0, (sum, doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final price = (data['totalPrice'] as num?)?.toDouble() ?? 0.0;
+          return sum + price;
+        });
+        final formattedTotalPenjualan = 'Rp ${NumberFormat('#,###', 'id_ID').format(totalPenjualanVal)}';
+        
+        // Count of completed/successful orders
+        final orderBerhasilCount = completedOrders.length;
+
+        // Calculate dynamic weekly/daily chart spots for the last 7 days
+        final now = DateTime.now();
+        final spots = <FlSpot>[];
+        final dailySales = List.filled(7, 0.0);
+        
+        for (int i = 0; i < 7; i++) {
+          final dayStart = DateTime(now.year, now.month, now.day).subtract(Duration(days: 6 - i));
+          final dayEnd = dayStart.add(const Duration(days: 1));
+          
+          final sum = completedOrders.where((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
+            if (createdAt == null) return false;
+            return createdAt.isAfter(dayStart) && createdAt.isBefore(dayEnd);
+          }).fold<double>(0.0, (sum, doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            final price = (data['totalPrice'] as num?)?.toDouble() ?? 0.0;
+            return sum + price;
+          });
+          dailySales[i] = sum;
+        }
+
+        final allZero = dailySales.every((val) => val == 0.0);
+        for (int i = 0; i < 7; i++) {
+          spots.add(FlSpot(i.toDouble(), allZero ? (10000.0 * (i + 1)) : dailySales[i]));
+        }
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Laporan & Statistik',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: kDark,
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Sales Chart
+              Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Penjualan Mingguan',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        height: 200,
+                        child: LineChart(
+                          LineChartData(
+                            gridData: FlGridData(show: false),
+                            titlesData: FlTitlesData(show: false),
+                            borderData: FlBorderData(show: false),
+                            lineBarsData: [
+                              LineChartBarData(
+                                spots: spots,
+                                isCurved: true,
+                                color: kGreen,
+                                barWidth: 4,
+                                belowBarData: BarAreaData(
+                                  show: true,
+                                  color: kGreen.withOpacity(0.1),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Export Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => _exportLaporan(context, orderDocs),
+                  icon: const Icon(Icons.download, color: Colors.black),
+                  label: const Text(
+                    'Export Laporan',
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kGreen,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Summary Stats
+              const Text(
+                'Ringkasan Bulanan',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildStatCard('Total Penjualan', formattedTotalPenjualan),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(child: _buildStatCard('Order Berhasil', orderBerhasilCount.toString())),
                 ],
               ),
-            ),
-          ),
+              const SizedBox(height: 32),
 
-          const SizedBox(height: 20),
-
-          // Export Button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Fitur export laporan sedang dikembangkan'),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.download, color: Colors.black),
-              label: const Text(
-                'Export Laporan',
-                style: TextStyle(
-                  color: Colors.black,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kGreen,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          // Summary Stats
-          const Text(
-            'Ringkasan Bulanan',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildStatCard('Total Penjualan', 'Rp 5.200.000'),
-              ),
-              const SizedBox(width: 16),
-              Expanded(child: _buildStatCard('Order Berhasil', '156')),
-            ],
-          ),
-          const SizedBox(height: 32),
-
-          // Logout Button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (BuildContext context) {
-                    return AlertDialog(
-                      title: const Text('Konfirmasi Logout'),
-                      content: const Text(
-                        'Apakah Anda yakin ingin logout dari akun admin?',
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.black,
-                            textStyle: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                            ),
+              // Logout Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (BuildContext context) {
+                        return AlertDialog(
+                          title: const Text('Konfirmasi Logout'),
+                          content: const Text(
+                            'Apakah Anda yakin ingin logout dari akun admin?',
                           ),
-                          child: const Text('Batal'),
-                        ),
-                        ElevatedButton(
-                          onPressed: () {
-                            Navigator.of(context).pop(); // Close dialog
-                            Navigator.pushNamedAndRemoveUntil(
-                              context,
-                              '/', // Navigate to login page
-                              (route) => false,
-                            );
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                            foregroundColor: Colors.black,
-                            textStyle: const TextStyle(
-                              fontWeight: FontWeight.bold,
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.black,
+                                textStyle: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              child: const Text('Batal'),
                             ),
-                          ),
-                          child: const Text('Logout'),
-                        ),
-                      ],
+                            ElevatedButton(
+                              onPressed: () {
+                                Navigator.of(context).pop(); // Close dialog
+                                Navigator.pushNamedAndRemoveUntil(
+                                  context,
+                                  '/', // Navigate to login page
+                                  (route) => false,
+                                );
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                                foregroundColor: Colors.black,
+                                textStyle: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              child: const Text('Logout'),
+                            ),
+                          ],
+                        );
+                      },
                     );
                   },
-                );
-              },
-              icon: const Icon(Icons.logout),
-              label: const Text('Logout Admin'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Logout Admin'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -2197,8 +2448,9 @@ class ReportsTab extends StatelessWidget {
           children: [
             Text(
               value,
+              textAlign: TextAlign.center,
               style: const TextStyle(
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: FontWeight.bold,
                 color: kDark,
               ),
