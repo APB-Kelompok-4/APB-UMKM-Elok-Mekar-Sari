@@ -116,7 +116,32 @@ class _ComplaintPageState extends State<ComplaintPage>
                 return const Center(child: CircularProgressIndicator(color: kGreen));
               }
               if (snapshot.hasError) {
-                return Center(child: Text('Terjadi kesalahan: ${snapshot.error}'));
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.wifi_off_rounded, size: 64, color: kBorder),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Gagal Memuat Riwayat',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: kDark,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Periksa koneksi internet Anda dan coba lagi.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: kGray, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
               }
               final complaints = snapshot.data ?? [];
               return ComplaintHistoryTab(complaints: complaints);

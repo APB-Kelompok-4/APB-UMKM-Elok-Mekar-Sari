@@ -42,31 +42,41 @@ class ComplaintService {
   /// Stream semua keluhan (untuk admin)
   static Stream<List<Complaint>> streamAllComplaints() {
     return _complaintsCol
-        .orderBy('createdDate', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => Complaint.fromFirestore(doc))
-            .toList());
+        .map((snapshot) {
+          final list = snapshot.docs
+              .map((doc) => Complaint.fromFirestore(doc))
+              .toList();
+          // Sort di client-side agar tidak butuh composite index
+          list.sort((a, b) => b.createdDate.compareTo(a.createdDate));
+          return list;
+        });
   }
 
   /// Stream keluhan milik user tertentu
   static Stream<List<Complaint>> streamUserComplaints(String userId) {
     return _complaintsCol
         .where('customerId', isEqualTo: userId)
-        .orderBy('createdDate', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => Complaint.fromFirestore(doc))
-            .toList());
+        .map((snapshot) {
+          final list = snapshot.docs
+              .map((doc) => Complaint.fromFirestore(doc))
+              .toList();
+          // Sort di client-side agar tidak butuh composite index
+          list.sort((a, b) => b.createdDate.compareTo(a.createdDate));
+          return list;
+        });
   }
 
   /// Ambil semua keluhan sekali (bukan stream) – untuk backward compat
   static Future<List<Complaint>> getAllComplaints() async {
-    final snapshot =
-        await _complaintsCol.orderBy('createdDate', descending: true).get();
-    return snapshot.docs
+    final snapshot = await _complaintsCol.get();
+    final list = snapshot.docs
         .map((doc) => Complaint.fromFirestore(doc))
         .toList();
+    // Sort di client-side agar tidak butuh index
+    list.sort((a, b) => b.createdDate.compareTo(a.createdDate));
+    return list;
   }
 
   // ============ CHAT MESSAGES (sub-collection) ============

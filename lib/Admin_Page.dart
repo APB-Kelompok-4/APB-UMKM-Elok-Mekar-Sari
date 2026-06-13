@@ -34,15 +34,6 @@ class AdminPage extends StatefulWidget {
 class _AdminPageState extends State<AdminPage> {
   int _selectedIndex = 0;
 
-  static const List<Widget> _widgetOptions = <Widget>[
-    DashboardTab(),
-    ProductManagementTab(),
-    OrderManagementTab(),
-    ComplaintManagementTab(),
-    UserManagementTab(),
-    ReportsTab(),
-  ];
-
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
@@ -90,6 +81,18 @@ class _AdminPageState extends State<AdminPage> {
 
   @override
   Widget build(BuildContext context) {
+    final List<Widget> widgetOptions = <Widget>[
+      DashboardTab(
+        onTapPendingComplaints: () => _onItemTapped(3),
+        onTapTotalOrders: () => _onItemTapped(2),
+      ),
+      const ProductManagementTab(),
+      const OrderManagementTab(),
+      const ComplaintManagementTab(),
+      const UserManagementTab(),
+      const ReportsTab(),
+    ];
+
     return Scaffold(
       appBar: AppBar(
         title: Text(_getAppBarTitle()),
@@ -97,7 +100,7 @@ class _AdminPageState extends State<AdminPage> {
         elevation: 0,
         actions: _getAppBarActions(),
       ),
-      body: _widgetOptions.elementAt(_selectedIndex),
+      body: widgetOptions.elementAt(_selectedIndex),
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
@@ -130,7 +133,14 @@ class _AdminPageState extends State<AdminPage> {
 
 // ========== DASHBOARD TAB ==========
 class DashboardTab extends StatelessWidget {
-  const DashboardTab({Key? key}) : super(key: key);
+  final VoidCallback? onTapPendingComplaints;
+  final VoidCallback? onTapTotalOrders;
+
+  const DashboardTab({
+    Key? key,
+    this.onTapPendingComplaints,
+    this.onTapTotalOrders,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -230,6 +240,7 @@ class DashboardTab extends StatelessWidget {
                           ordersTodayCount.toString(),
                           Icons.shopping_cart,
                           kGreen,
+                          onTap: onTapTotalOrders,
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -239,6 +250,7 @@ class DashboardTab extends StatelessWidget {
                           formattedRevenue,
                           Icons.attach_money,
                           kGreenLight,
+                          onTap: onTapTotalOrders,
                         ),
                       ),
                     ],
@@ -252,6 +264,7 @@ class DashboardTab extends StatelessWidget {
                           _getPendingComplaintCount(allComplaints).toString(),
                           Icons.report_problem,
                           Colors.orange,
+                          onTap: onTapPendingComplaints,
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -302,43 +315,20 @@ class DashboardTab extends StatelessWidget {
   }
 
   int _getPendingComplaintCount(List<Complaint> allComplaints) {
-    final umkmProducts = _getUMKMProducts();
     return allComplaints.where((complaint) {
-      final isPending =
-          complaint.status == ComplaintStatus.submitted ||
+      return complaint.status == ComplaintStatus.submitted ||
           complaint.status == ComplaintStatus.inProgress ||
           complaint.status == ComplaintStatus.reviewed ||
           complaint.status == ComplaintStatus.waitingCustomer;
-      final isUMKMProduct =
-          complaint.productName != null &&
-          umkmProducts.contains(complaint.productName);
-      return isPending && isUMKMProduct;
     }).length;
   }
 
-  List<String> _getUMKMProducts() {
-    return [
-      'Nugget Lele',
-      'Sempol Jamur',
-      'Tahu Walik',
-      'Jangkrik Krispi',
-      'Sinom',
-      'Sate Jamur',
-    ];
-  }
-
   List<Complaint> _getPendingComplaints(List<Complaint> allComplaints) {
-    final umkmProducts = _getUMKMProducts();
     return allComplaints.where((complaint) {
-      final isPending =
-          complaint.status == ComplaintStatus.submitted ||
+      return complaint.status == ComplaintStatus.submitted ||
           complaint.status == ComplaintStatus.inProgress ||
           complaint.status == ComplaintStatus.reviewed ||
           complaint.status == ComplaintStatus.waitingCustomer;
-      final isUMKMProduct =
-          complaint.productName != null &&
-          umkmProducts.contains(complaint.productName);
-      return isPending && isUMKMProduct;
     }).toList();
   }
 
@@ -359,33 +349,37 @@ class DashboardTab extends StatelessWidget {
     String title,
     String value,
     IconData icon,
-    Color color,
-  ) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Icon(icon, size: 32, color: color),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: kDark,
+    Color color, {
+    VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Card(
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Icon(icon, size: 32, color: color),
+              const SizedBox(height: 8),
+              Text(
+                value,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: kDark,
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: kGray),
-            ),
-          ],
+              const SizedBox(height: 4),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: kGray),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -513,10 +507,11 @@ class DashboardTab extends StatelessWidget {
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
           child: ListTile(
+            onTap: onTapPendingComplaints,
             title: Text(
               'Keluhan #${complaint.id} - ${complaint.productName ?? complaint.subject}',
             ),
-            subtitle: Text('Dari: ${complaint.customerName}'),
+            subtitle: Text('Kategori: ${complaint.category} • Dari: ${complaint.customerName}'),
             trailing: Text(
               _priorityToString(complaint.priority),
               style: TextStyle(

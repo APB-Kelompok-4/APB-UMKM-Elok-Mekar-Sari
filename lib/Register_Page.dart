@@ -79,12 +79,13 @@ class _RegisterPageState extends State<RegisterPage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Akun berhasil dibuat! Silakan login.'),
+          content: Text('Akun berhasil dibuat! Selamat datang 🎉'),
           backgroundColor: kGreen,
         ),
       );
 
-      Navigator.pop(context);
+      // Langsung ke home karena Firebase Auth sudah otomatis login user baru
+      Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
@@ -298,7 +299,7 @@ class _RegisterPageState extends State<RegisterPage> {
                       obscureText: _obscurePassword,
                       decoration: InputDecoration(
                         hintText: 'Minimal 8 karakter',
-                        hintStyle: TextStyle(color: kGray.withOpacity(0.5)),
+                        hintStyle: TextStyle(color: kGray.withValues(alpha: 0.5)),
                         prefixIcon: Icon(Icons.lock_outline, color: kGray),
                         suffixIcon: IconButton(
                           icon: Icon(
@@ -390,7 +391,7 @@ class _RegisterPageState extends State<RegisterPage> {
                     onPressed: _isLoading ? null : _register,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: kGreen,
-                      disabledBackgroundColor: kGreen.withOpacity(0.5),
+                      disabledBackgroundColor: kGreen.withValues(alpha: 0.5),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8)),
@@ -459,7 +460,7 @@ class _RegisterPageState extends State<RegisterPage> {
           borderRadius: BorderRadius.circular(8),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.02),
+              color: Colors.black.withValues(alpha: 0.02),
               blurRadius: 6,
               offset: const Offset(0, 2),
             ),
@@ -511,7 +512,7 @@ class _RegisterPageState extends State<RegisterPage> {
           keyboardType: keyboardType,
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: TextStyle(color: kGray.withOpacity(0.5)),
+            hintStyle: TextStyle(color: kGray.withValues(alpha: 0.5)),
             prefixIcon: icon != null ? Icon(icon, color: kGray) : null,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
